@@ -40,8 +40,8 @@ on two real computers.
 
 ## Phase 5: US3 — moderation (P2)
 
-- [ ] T019 [US3] `test/moderation.test.js`
-- [ ] T020 [US3] `app.js`: moderator buttons on threads/comments, People screen (roles, ban, unban), Moderation log
+- [x] T019 [US3] `test/moderation.test.js`
+- [x] T020 [US3] `app.js`: moderator buttons on threads/comments, People screen (roles, ban, unban), Moderation log
 
 ## Phase 6: US4 — a second computer (P2)
 

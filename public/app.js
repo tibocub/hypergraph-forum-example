@@ -125,7 +125,7 @@ async function navBar () {
   const boards = [{ key: me.forum.key, name: 'General' }, ...await call(me.forum.key, 'subspaces')]
   $('#brand').textContent = me.forum.name || 'Forum'
   $('#boards').innerHTML = boards.map((b) => `<a href="#/b/${esc(b.key)}" class="${route[1] === b.key ? 'here' : ''}">${esc(b.name)}</a>`).join('')
-  $('#settings-link').hidden = false
+  $('#links').hidden = false
   const peers = await call(me.forum.key, 'peers')
   $('#online').textContent = `${new Set(peers.map((p) => p.identity)).size} other(s) online`
 }
@@ -159,6 +159,7 @@ async function boardScreen (board) {
 }
 
 async function threadScreen (board, id) {
+  const mod = MODS.includes(await call(me.forum.key, 'getRole', me.identity))
   $('#main').innerHTML = `<div id="thread"></div>
     <form id="reply" class="card"><strong id="reply-to">Comment</strong>
       <textarea name="text" required></textarea>
@@ -178,7 +179,8 @@ async function threadScreen (board, id) {
     const [score, who, replies] = await Promise.all([call(board, 'sum', 'vote', 'value', { on: r.id }), nameOf(r.author), call(board, 'linked', r.id, 'comment')])
     replies.items.sort((x, y) => x.stamp - y.stamp)
     const mine = r.author === me.identity
-    const body = r.type === 'post' ? `<h1>${esc(r.title)}</h1>${markdown(r.text)}` : markdown(r.text)
+    const body = (r.type === 'post' ? `<h1>${esc(r.title)}</h1>${markdown(r.text)}` : markdown(r.text)) +
+      (r.hidden ? '<p class="muted">Hidden by moderators.</p>' : '') + (r.flagged ? '<p class="muted">Flagged for moderators.</p>' : '')
     return `<div class="${r.type === 'post' ? 'card' : 'comment'}" data-id="${esc(r.id)}" data-type="${r.type}">
       ${body}
       <div class="muted votes">
@@ -186,6 +188,7 @@ async function threadScreen (board, id) {
         · ${esc(who)} · ${when(r.stamp)}${r.edited ? ' · edited' : ''}
         <button class="link" data-act="reply">reply</button>
         ${mine ? '<button class="link" data-act="edit">edit</button><button class="link" data-act="del">delete</button>' : ''}
+        ${mod ? `<button class="link" data-act="${r.hidden ? 'reveal' : 'hide'}">${r.hidden ? 'reveal' : 'hide'}</button><button class="link" data-act="takedown">take down</button>` : ''}
       </div>
       ${(await Promise.all(replies.items.map(item))).join('')}</div>`
   }
@@ -204,10 +207,21 @@ async function threadScreen (board, id) {
       if (act === 'reply') { replyTo = rid; $('#reply-to').textContent = 'Reply'; $('#reply-reset').hidden = false; $('#reply textarea').focus() }
       if (act === 'del' && confirm('Delete this for everyone?')) await call(board, 'del', rid)
       if (act === 'edit') await edit(board, rid, el.dataset.type)
+      if (act === 'hide') await moderate(board, 'hide', rid, prompt('Why hide it? (shown in the log)'))
+      if (act === 'reveal') await moderate(board, 'reveal', rid, '')
+      if (act === 'takedown' && confirm('Take this down for good, for everyone?')) await moderate(board, 'remove', rid, prompt('Why? (shown in the log)'))
       refresh()
     } catch (err) { showError(err) }
   }
   return { space: board, types: ['post', 'comment', 'vote', 'profile'], render, into: '#thread' }
+}
+
+const MODS = ['owner', 'admin', 'moderator']
+
+// A cancelled prompt (null reason) does nothing.
+async function moderate (space, action, target, reason) {
+  if (reason === null) return
+  await call(space, 'moderateAction', action, target, { reason })
 }
 
 async function edit (board, id, type) {
@@ -222,6 +236,76 @@ async function edit (board, id, type) {
   if (text === null) return
   changes.text = text
   await call(board, 'edit', id, changes)
+}
+
+async function peopleScreen () {
+  const role = await call(me.forum.key, 'getRole', me.identity)
+  const decides = role === 'owner' || role === 'admin'
+  const render = async () => {
+    const [members, peers] = await Promise.all([call(me.forum.key, 'members'), call(me.forum.key, 'peers')])
+    const online = new Set(peers.map((p) => p.identity))
+    const rows = await Promise.all(members.map(async (m) => {
+      const them = !m.you && m.role !== 'owner'
+      const actions = [
+        decides && them && m.role ? `<select data-act="role" aria-label="Role">${['admin', 'moderator', 'friend', 'member'].map((r) => `<option ${r === m.role ? 'selected' : ''}>${r}</option>`).join('')}</select>` : '',
+        MODS.includes(role) && them ? `<button class="link" data-act="${m.banned ? 'unban' : 'ban'}">${m.banned ? 'unban' : 'ban'}</button>` : '',
+        decides && them && m.role ? '<button class="link" data-act="remove">remove</button>' : ''
+      ].join(' ')
+      const state = m.banned ? 'banned' : m.removed ? 'removed' : m.role
+      return `<div class="card" data-who="${esc(m.identity)}"><strong>${esc(await nameOf(m.identity))}</strong>
+        <span class="muted">${esc(state)}${online.has(m.identity) ? ' · online' : ''}${m.you ? ' · you' : ''}</span> ${actions}</div>`
+    }))
+    return rows.join('')
+  }
+  $('#main').innerHTML = '<h1>People</h1><div id="people"></div>'
+  const act = async (e) => {
+    const el = e.target.closest('[data-who]')
+    const what = e.target.dataset.act
+    if (!el || !what || (e.type === 'click' && what === 'role')) return
+    const who = el.dataset.who
+    try {
+      if (what === 'role') await call(me.forum.key, 'setRole', who, e.target.value)
+      if (what === 'ban') await moderate(me.forum.key, 'ban', who, prompt('Why ban them? (shown in the log)'))
+      if (what === 'unban') await moderate(me.forum.key, 'unban', who, '')
+      if (what === 'remove' && confirm('Take them out of the forum? What they wrote stays.')) await call(me.forum.key, 'removeRole', who)
+      refresh()
+    } catch (err) { showError(err) }
+  }
+  $('#people').onclick = act
+  $('#people').onchange = act
+  return { space: me.forum.key, types: ['profile'], on: ['members', 'peers'], render, into: '#people' }
+}
+
+// What a decision did, in words.
+async function describe (d) {
+  const who = async (id) => esc(await nameOf(id))
+  if (d.type === 'moderate') return `${d.action} ${d.action === 'ban' || d.action === 'unban' ? await who(d.target) : 'a post'}${d.reason ? `: "${esc(d.reason)}"` : ''}`
+  if (d.type === 'role/set') return `made ${await who(d.identity)} ${esc(d.role)}`
+  if (d.type === 'role/remove') return `took ${await who(d.identity)} out`
+  if (d.type === 'invite/redeem') return `let ${await who(d.identity)} in as ${esc(d.role)}`
+  if (d.type === 'subspace/create') return `added the board "${esc(d.name)}"`
+  return esc(d.type)
+}
+
+// The forum's and every board's decisions, newest first.
+async function logScreen () {
+  const mod = MODS.includes(await call(me.forum.key, 'getRole', me.identity))
+  const render = async () => {
+    const spaces = [me.forum.key, ...(await call(me.forum.key, 'subspaces')).map((b) => b.key)]
+    const lists = await Promise.all(spaces.map(async (space) => (await call(space, 'decisions', { limit: 50 })).items.map((d) => ({ ...d, space }))))
+    const all = lists.flat().sort((x, y) => y.at - x.at).slice(0, 100)
+    const rows = await Promise.all(all.map(async (d) => {
+      const reveal = mod && d.type === 'moderate' && d.action === 'hide' ? `<button class="link" data-space="${esc(d.space)}" data-target="${esc(d.target)}">reveal</button>` : ''
+      return `<div class="card">${esc(await nameOf(d.by))} ${await describe(d)} <span class="muted">· ${when(d.at)}${d.counted ? '' : ' · did not count'}</span> ${reveal}</div>`
+    }))
+    return rows.join('') || '<p class="muted">Nothing decided yet.</p>'
+  }
+  $('#main').innerHTML = '<h1>Moderation log</h1><div id="log"></div>'
+  $('#log').onclick = (e) => {
+    const { space, target } = e.target.dataset
+    if (space) moderate(space, 'reveal', target, '').then(refresh, showError)
+  }
+  return { space: null, types: ['profile'], on: ['decisions'], render, into: '#log' }
 }
 
 async function settingsScreen () {
@@ -275,6 +359,8 @@ async function show () {
   if (route[0] === 'b' && route[1]) screen = await boardScreen(route[1])
   else if (route[0] === 't' && route[1] && route[2]) screen = await threadScreen(route[1], route[2])
   else if (route[0] === 'settings') screen = await settingsScreen()
+  else if (route[0] === 'people') screen = await peopleScreen()
+  else if (route[0] === 'log') screen = await logScreen()
   else return (location.hash = `#/b/${me.forum.key}`)
   lastHTML = ''
   await Promise.all([refresh(), navBar()])
@@ -294,8 +380,9 @@ const live = new EventSource('/api/events')
 live.addEventListener('change', (e) => {
   const { space, records } = JSON.parse(e.data)
   if (records.some((r) => r.type === 'profile')) names.clear()
-  if (screen && space === screen.space && records.some((r) => screen.types.includes(r.type))) soon(refresh)
+  if (screen && (space === screen.space || !screen.space) && records.some((r) => screen.types.includes(r.type))) soon(refresh)
 })
+for (const name of ['members', 'decisions', 'peers']) live.addEventListener(name, () => { if (screen?.on?.includes(name)) soon(refresh) })
 for (const name of ['spaces', 'peers']) live.addEventListener(name, () => { if (me?.forum) soon(navBar) })
 // A computer just paired gets the forum a moment after setup.
 live.addEventListener('spaces', () => { if (me?.setUp && !me.forum) soon(start) })
