@@ -118,7 +118,7 @@ automated.
 - **FR-003** Threads, comments, replies, votes, edit, delete, as in hypergraph's
   `test/next/forum/` (post, comment, vote types).
 - **FR-004** Moderation and roles as in hypergraph's moderation API; a readable moderation log.
-- **FR-005** Invite codes: one use, made by owner/admins, expire after 7 days.
+- **FR-005** Invite codes: one use, made by any member (role `friend`), expire after 7 days.
 - **FR-006** Device pairing with a code; device list; remove a lost device (password).
 - **FR-007** A display name per member, the same on all their devices.
 - **FR-008** Basic Markdown, rendered safely: other members' text never runs as HTML.
@@ -158,10 +158,13 @@ automated.
 - Sorting is newest first; no "hot" ranking, no front page across boards, no search, no
   notifications, no images (later).
 
-## Open questions (for Tibo)
+## Answers (Tibo, 2026-10-30)
 
-1. **Who may invite?** Default: owner and admins (hypergraph's built-ins). Should every member be able
-   to invite (a custom role with `invite`)?
-2. **Background**: OK that the forum is online only while its window is open, for the trial?
-3. **The trial's report**: OK that friends send their `delivery.jsonl` to Tibo at the end?
-4. **Names**: a `profile` record per member (no hypergraph change) — or wait for request F1?
+1. **Who may invite**: any member. The forum defines a `friend` role (`post`, `invite`) and lets people
+   in as `friend`. hypergraph's rules make this partial today (request F6): a friend's invite can only
+   give `member`, which can't invite.
+2. **Online only while the program runs**: OK for the trial; no background service.
+3. **Delivery logs**: friends send their `delivery.jsonl` to Tibo at the end. A post is lost for good
+   only if its author never comes back, so the report is mainly for catching replication bugs (two
+   members online together and a post still not arriving) and measuring delays.
+4. **Names**: a `profile` record, as planned.

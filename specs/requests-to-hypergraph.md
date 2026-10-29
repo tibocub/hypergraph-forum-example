@@ -22,10 +22,13 @@ uses H1…).
   last record of a page as plain JSON (`id` a string, `stamp` a number). The query reads
   `after.stamp` and `idOf(after)`; is a plain object officially fine (docs say "a record from the last
   page")? Checked by `test/posting.test.js`.
+  **Answered (lead, 2026-10-30)**: yes, only `after.stamp` and `after.id` are read.
 - **F5 — Policy of sub-spaces.** The forum wants "every member keeps everything" for the forum and all
   its boards (sub-spaces). Does a sub-space follow its parent's `'everything'`, or does each need its
   own `setPolicy('everything')` (the plan calls it on each new board)? And does `setPolicy` on a
   sub-space work like on a top space (its decisions live in the parent's log)?
+  **Answered (lead, 2026-10-30)**: no inheritance today (own policy or 'auto'); keep the per-board
+  `setPolicy('everything')`. A core fix to inherit it is proposed.
 
 ## For hypergraph spec 013 (helpers), from the forum
 
@@ -35,3 +38,17 @@ uses H1…).
   and edit them like any other read (spec 012's rule). (c) Per helper, whether this device reaches it
   now, so Tibo can see the VPS is down. (d) A helper listed on the forum also serves its boards
   (sub-spaces), with no extra step per board.
+  **Answered (lead, 2026-10-30)**: 013 merged (bab86c3): `space.setHelpers([key])` (owner, top space),
+  `space.helpers`, changes fire `decisions`; sub-spaces use their top space's helpers; nothing waits.
+  (c) not built: left out of v1.
+
+## Found while building spec 001 (2026-10-30)
+
+- **F6 — "Any member may invite" can't be set up.** Tibo wants every member of the forum to invite.
+  The built-in `member` role can't gain `invite` (`defineRole` refuses built-in names), and a custom
+  role with `invite` may only invite to roles below it, or `member`/`guest` (`mayInvite`,
+  `lib/decisions/state.js:69`). So with `friend = ['post', 'invite']`: the owner's and admins' codes
+  give `friend`, but a friend's code can only give `member`, who can't invite. Wanted, one of: a
+  space setting "members may invite", a way to give the built-in `member` role more permissions per
+  space, or a custom role allowed to invite to itself. The forum meanwhile invites as `friend` when it
+  may, else as `member` (so a friend's friend can't invite yet).
