@@ -1,0 +1,8 @@
+node_modules
+# a local forum's data when run with FORUM_DIR inside the repo
+.forum/
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/.credentials.json
+.claude/worktrees/

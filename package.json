@@ -1,0 +1,28 @@
+{
+  "name": "hypergraph-forum-example",
+  "version": "0.0.0",
+  "description": "An invite-only forum for a group of friends, with no server: each member runs it on their own computer, on hypergraph.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "hypergraph-forum": "bin/forum.js"
+  },
+  "scripts": {
+    "start": "node bin/forum.js",
+    "test": "brittle-node test/*.test.js"
+  },
+  "dependencies": {
+    "hypergraph": "file:../hypergraph"
+  },
+  "devDependencies": {
+    "brittle": "^4.5.0",
+    "hyperdht": "6.32.0"
+  },
+  "overrides": {
+    "hyperdht": "$hyperdht"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
