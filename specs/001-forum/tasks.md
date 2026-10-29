@@ -50,8 +50,8 @@ on two real computers.
 
 ## Phase 7: US5 — delivery log (P2)
 
-- [ ] T023 [US5] `test/delivery.test.js` and `test/restart.test.js`
-- [ ] T024 [US5] `lib/delivery.js` (wired in `lib/server.js`), `scripts/delivery-report.js`
+- [x] T023 [US5] `test/delivery.test.js` (the restart checks live there too: same token, data kept, live again, nothing logged twice)
+- [x] T024 [US5] `lib/delivery.js` (wired in `lib/server.js`), `scripts/delivery-report.js`
 
 ## Phase 8: US6 — install (P3)
 
