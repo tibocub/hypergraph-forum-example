@@ -5,35 +5,38 @@ fail, then the code. `[P]` = can run in parallel (different files). `[USn]` = us
 
 ## Phase 1: Setup
 
-- [ ] T001 `npm install` (hypergraph junction); check `import hypergraph from 'hypergraph/next'` works from ESM
-- [ ] T002 [P] `test/helpers.js`: `tmpDir`, `testBootstrap`, `eventually`, `codeOf` (from hypergraph's `test/next/helpers.js`)
-- [ ] T003 [P] `lib/types.js`: post, comment, vote, profile + rules `title-length`, `vote-value`, `name-length`
+- [x] T001 `npm install` (hypergraph junction); check `import hypergraph from 'hypergraph/next'` works from ESM
+- [x] T002 [P] `test/helpers.js`: `tmpDir`, `testBootstrap`, `eventually`, `codeOf` (from hypergraph's `test/next/helpers.js`)
+- [x] T003 [P] `lib/types.js`: post, comment, vote, profile + rules `title-length`, `vote-value`, `name-length`
 
 ## Phase 2: Foundation (server, lock, bridge, live channel)
 
-- [ ] T004 `test/security.test.js`: no token 401, wrong Host 403, non-JSON POST 415, unknown call `UNKNOWN_CALL`, unlisted file 404
-- [ ] T005 `lib/server.js`: `startForum({ dir, port, bootstrap })`, 127.0.0.1, token file, `/login` cookie, Host/JSON checks, static list, `close()`
-- [ ] T006 `test/helpers.js`: `peer(t, label)` with `setup`, `call`, `events()` / `waitFor`
-- [ ] T007 `lib/bridge.js`: `POST /api/call`, the allow-list, `query` object → chain, errors → `{ code, message }`
-- [ ] T008 `lib/live.js`: `GET /api/events`, forward hypergraph events (spaces joined later included), keep-alive
+- [x] T004 `test/security.test.js`: no token 401, wrong Host 403, non-JSON POST 415, unknown call `UNKNOWN_CALL`, unlisted file 404
+- [x] T005 `lib/server.js`: `startForum({ dir, port, bootstrap })`, 127.0.0.1, token file, `/login` cookie, Host/JSON checks, static list, `close()`
+- [x] T006 `test/helpers.js`: `peer(t, label)` with `setup`, `call`, `events()` / `waitFor`
+- [x] T007 `lib/bridge.js`: `POST /api/call`, the allow-list, `query` object → chain, errors → `{ code, message }`
+- [x] T008 `lib/live.js`: `GET /api/events`, forward hypergraph events (spaces joined later included), keep-alive
 
 ## Phase 3: US1 — start the forum, let a friend in (P1)
 
-- [ ] T009 [US1] `test/setup.test.js` (plan.md table)
-- [ ] T010 [US1] setup in `lib/server.js`: `POST /api/setup` new account / `joinCode`; only `state`/`setup` before it
-- [ ] T011 [US1] `ONE_FORUM` guard on `createSpace` and `redeemInvite` in `lib/bridge.js`
-- [ ] T012 [US1] `public/index.html`, `public/app.js` shell (`call`, `EventSource`, hash router), `public/style.css`; screens Setup, recovery phrase, Create forum / Join
+- [x] T009 [US1] `test/setup.test.js` (plan.md table)
+- [x] T010 [US1] setup in `lib/server.js`: `POST /api/setup` new account / `joinCode`; only `state`/`setup` before it
+- [x] T011 [US1] `ONE_FORUM` guard on `createSpace` and `redeemInvite` in `lib/bridge.js`
+- [x] T012 [US1] `public/index.html`, `public/app.js` shell (`call`, `EventSource`, hash router), `public/style.css`; screens Setup, recovery phrase, Create forum / Join
 
 ## Phase 4: US2 — boards, threads, comments, votes (P1) 🎯 MVP
 
-- [ ] T013 [P] [US2] `test/markdown.test.js`
-- [ ] T014 [P] [US2] `public/markdown.js`: escape first, then the small pattern set
-- [ ] T015 [US2] `test/posting.test.js` (3 peers; live within 2 s; paging)
-- [ ] T016 [US2] fix whatever T015 shows in the bridge (no forum logic in the server)
-- [ ] T017 [US2] `app.js`: Board and Thread screens, new thread, comment/reply, vote, edit, delete, names (profile), live re-render
-- [ ] T018 [US2] `test/ui.test.js` smoke
+- [x] T013 [P] [US2] `test/markdown.test.js`
+- [x] T014 [P] [US2] `public/markdown.js`: escape first, then the small pattern set
+- [x] T015 [US2] `test/posting.test.js` (3 peers; live within 2 s; paging)
+- [x] T016 [US2] fix whatever T015 shows in the bridge (no forum logic in the server)
+- [x] T017 [US2] `app.js`: Board and Thread screens, new thread, comment/reply, vote, edit, delete, names (profile), live re-render
+- [x] T018 [US2] `test/ui.test.js` smoke
 
 **Checkpoint**: Tibo and one friend can use it by hand on two computers (plan.md manual check 2).
+Done 2026-10-30 on one machine (two peers, local DHT, browser pane): account, phrase, create, post with
+Markdown, comment, vote, invite code, second peer joins, its post shows live in the first tab. Not yet
+on two real computers.
 
 ## Phase 5: US3 — moderation (P2)
 

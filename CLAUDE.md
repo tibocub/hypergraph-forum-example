@@ -9,7 +9,8 @@ Node process on their own computer and uses it in a browser tab on `127.0.0.1`. 
 hypergraph's new core (`require('hypergraph/next')`) to prove hypergraph with real people. Its pieces
 (the JSON API, the live channel) later seed HyperBrowser.
 
-State (2026-10-29): spec 001 written (`specs/001-forum/`), nothing built yet.
+State (2026-10-30): spec 001 phases 1–4 built on branch `001-forum` (MVP: setup, invites, boards,
+threads, comments, votes, live page); phases 5–9 next. `npm test` runs everything.
 
 ## Governing documents
 

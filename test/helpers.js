@@ -118,14 +118,14 @@ async function events (t, url, headers) {
 export async function forumOf (t, ...labels) {
   const [owner, ...others] = labels
   const a = await peer(t, owner)
-  await a.setup({ password: `pw-${owner}` })
+  await a.setup({ password: `pw-${owner}-long` })
   const f = await a.call('account', 'createSpace', { name: 'Friends', policy: 'everything' })
   await a.call(f.key, 'defineRole', 'friend', ['post', 'invite'])
   await a.call(f.key, 'put', 'profile', { name: owner })
   const peers = [a]
   for (const label of others) {
     const p = await peer(t, label)
-    await p.setup({ password: `pw-${label}` })
+    await p.setup({ password: `pw-${label}-long` })
     const code = await a.call(f.key, 'createInvite', { role: 'friend', expires: Date.now() + 7 * 864e5 })
     await p.call('account', 'redeemInvite', code)
     await p.call(f.key, 'put', 'profile', { name: label })
