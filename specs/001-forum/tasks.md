@@ -55,9 +55,9 @@ on two real computers.
 
 ## Phase 8: US6 — install (P3)
 
-- [ ] T025 [US6] `bin/forum.js`: start, print the link, open the browser (`start` / `open` / `xdg-open`), "already running"
-- [ ] T026 [US6] `install.ps1`, `install.sh` (pinned `HYPERGRAPH_REF`), README install and "start again" steps
-- [ ] T027 [US6] manual checks 1–3 (plan.md); results noted in this file
+- [x] T025 [US6] `bin/forum.js`: start, print the link, open the browser (`start` / `open` / `xdg-open`), "already running"
+- [x] T026 [US6] `install.ps1`, `install.sh` (pinned `HYPERGRAPH_REF`), README install and "start again" steps
+- [ ] T027 [US6] manual checks 1–3 (plan.md); results noted in this file — Tibo does these
 
 ## Phase 9: Trial
 
