@@ -317,7 +317,28 @@ async function settingsScreen () {
     <div class="card"><strong>Invite a friend</strong>
       <p class="muted">A code works once, for 7 days. Send it any way you like.</p>
       <p><button id="invite">Make a code</button></p><p class="words" id="code"></p></div>
-    ${decides ? `<form id="board" class="card"><strong>New board</strong><input name="name" required><button type="submit">Add</button></form>` : ''}`
+    ${decides ? `<form id="board" class="card"><strong>New board</strong><input name="name" required><button type="submit">Add</button></form>` : ''}
+    <form id="devices" class="card"><strong>Your computers</strong>
+      <div id="device-list"></div>
+      <label>Your password on this computer <input name="password" type="password" required autocomplete="current-password"></label>
+      <div><button type="submit">Add a computer</button></div>
+      <p class="muted">On the new computer, install the forum and paste this code (it works for 10 minutes):</p>
+      <p class="words" id="device-code"></p></form>`
+  onSubmit($('#devices'), async ({ password }) => {
+    const { code } = await call('account', 'addDevice', { password })
+    $('#device-code').textContent = code
+  })
+  // A lost computer: what it wrote stays, nothing after counts.
+  $('#device-list').onclick = async (e) => {
+    const key = e.target.dataset.remove
+    if (!key || !confirm('Remove this computer from your account?')) return
+    const password = $('#devices').password.value
+    if (!password) return showError(new Error('Type your password first'))
+    try {
+      await call('account', 'removeDevice', key, { password })
+      refresh()
+    } catch (err) { showError(err) }
+  }
   onSubmit($('#name'), async ({ name }) => {
     await call(me.forum.key, 'put', 'profile', { name })
     names.delete(me.identity)
@@ -336,7 +357,9 @@ async function settingsScreen () {
       location.hash = `#/b/${b.key}`
     })
   }
-  return null
+  const render = async () => (await call('account', 'devices')).map((d) =>
+    `<div>${esc(d.name || 'a computer')}${d.current ? ' <span class="muted">(this one)</span>' : ` <button type="button" class="link" data-remove="${esc(d.publicKey)}">remove</button>`}</div>`).join('')
+  return { space: null, types: [], on: ['devices'], render, into: '#device-list' }
 }
 
 // --- routing and live updates ---
@@ -382,7 +405,7 @@ live.addEventListener('change', (e) => {
   if (records.some((r) => r.type === 'profile')) names.clear()
   if (screen && (space === screen.space || !screen.space) && records.some((r) => screen.types.includes(r.type))) soon(refresh)
 })
-for (const name of ['members', 'decisions', 'peers']) live.addEventListener(name, () => { if (screen?.on?.includes(name)) soon(refresh) })
+for (const name of ['members', 'decisions', 'peers', 'devices']) live.addEventListener(name, () => { if (screen?.on?.includes(name)) soon(refresh) })
 for (const name of ['spaces', 'peers']) live.addEventListener(name, () => { if (me?.forum) soon(navBar) })
 // A computer just paired gets the forum a moment after setup.
 live.addEventListener('spaces', () => { if (me?.setUp && !me.forum) soon(start) })

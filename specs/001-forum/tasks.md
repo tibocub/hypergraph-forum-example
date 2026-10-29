@@ -45,8 +45,8 @@ on two real computers.
 
 ## Phase 6: US4 — a second computer (P2)
 
-- [ ] T021 [US4] `test/devices.test.js`
-- [ ] T022 [US4] `app.js`: Settings → devices (add: show code; remove: password); Setup → "I have a device code"
+- [x] T021 [US4] `test/devices.test.js`
+- [x] T022 [US4] `app.js`: Settings → devices (add: show code; remove: password); Setup → "I have a device code"
 
 ## Phase 7: US5 — delivery log (P2)
 
