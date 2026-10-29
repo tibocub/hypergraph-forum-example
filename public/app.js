@@ -122,7 +122,8 @@ function joinScreen () {
 }
 
 async function navBar () {
-  const boards = [{ key: me.forum.key, name: 'General' }, ...await call(me.forum.key, 'subspaces')]
+  // The account's list, not forum.subspaces(): a board listed there may not open yet (F7).
+  const boards = [{ key: me.forum.key, name: 'General' }, ...(await call('account', 'spaces')).filter((s) => s.parent === me.forum.key)]
   $('#brand').textContent = me.forum.name || 'Forum'
   $('#boards').innerHTML = boards.map((b) => `<a href="#/b/${esc(b.key)}" class="${route[1] === b.key ? 'here' : ''}">${esc(b.name)}</a>`).join('')
   $('#links').hidden = false
@@ -284,6 +285,9 @@ async function describe (d) {
   if (d.type === 'role/remove') return `took ${await who(d.identity)} out`
   if (d.type === 'invite/redeem') return `let ${await who(d.identity)} in as ${esc(d.role)}`
   if (d.type === 'subspace/create') return `added the board "${esc(d.name)}"`
+  if (d.type === 'space/init') return `created the forum "${esc(d.name)}"`
+  if (d.type === 'role/define') return `defined the role ${esc(d.name)} (${esc(d.permissions.join(', '))})`
+  if (d.type === 'settings/set') return d.helpers ? 'changed the helpers' : d.policy ? `asked everyone to keep ${esc(d.policy)}` : 'recorded the app\'s rules'
   return esc(d.type)
 }
 
@@ -291,7 +295,7 @@ async function describe (d) {
 async function logScreen () {
   const mod = MODS.includes(await call(me.forum.key, 'getRole', me.identity))
   const render = async () => {
-    const spaces = [me.forum.key, ...(await call(me.forum.key, 'subspaces')).map((b) => b.key)]
+    const spaces = [me.forum.key, ...(await call('account', 'spaces')).filter((s) => s.parent === me.forum.key).map((b) => b.key)]
     const lists = await Promise.all(spaces.map(async (space) => (await call(space, 'decisions', { limit: 50 })).items.map((d) => ({ ...d, space }))))
     const all = lists.flat().sort((x, y) => y.at - x.at).slice(0, 100)
     const rows = await Promise.all(all.map(async (d) => {
@@ -318,12 +322,19 @@ async function settingsScreen () {
       <p class="muted">A code works once, for 7 days. Send it any way you like.</p>
       <p><button id="invite">Make a code</button></p><p class="words" id="code"></p></div>
     ${decides ? `<form id="board" class="card"><strong>New board</strong><input name="name" required><button type="submit">Add</button></form>` : ''}
+    <form id="helpers" class="card"><strong>Helpers</strong>
+      <p class="muted">Always-on computers that keep the forum available while everyone is offline. Never needed: the forum works without them.</p>
+      <label>One key per line <textarea name="keys" ${role === 'owner' ? '' : 'readonly'}>${esc((await call(me.forum.key, 'helpers')).join('\n'))}</textarea></label>
+      ${role === 'owner' ? '<div><button type="submit">Save</button></div>' : ''}</form>
     <form id="devices" class="card"><strong>Your computers</strong>
       <div id="device-list"></div>
       <label>Your password on this computer <input name="password" type="password" required autocomplete="current-password"></label>
       <div><button type="submit">Add a computer</button></div>
       <p class="muted">On the new computer, install the forum and paste this code (it works for 10 minutes):</p>
       <p class="words" id="device-code"></p></form>`
+  if (role === 'owner') {
+    onSubmit($('#helpers'), ({ keys }) => call(me.forum.key, 'setHelpers', keys.split(/\s+/).filter(Boolean)))
+  }
   onSubmit($('#devices'), async ({ password }) => {
     const { code } = await call('account', 'addDevice', { password })
     $('#device-code').textContent = code

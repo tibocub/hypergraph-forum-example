@@ -11,7 +11,7 @@ test('boards, a thread, comments and replies, votes, edit and delete, across 3 m
   await a.call(games.key, 'setPolicy', 'everything')
   t.is(games.parent, key, 'a board is a sub-forum')
   t.is(await codeOf(b.call(key, 'createSubspace', { name: 'Mine' })), 'NOT_ALLOWED', 'only owner and admins add boards')
-  t.ok(await eventually(async () => (await b.call(key, 'subspaces')).some((s) => s.key === games.key), 10000), 'b sees the board')
+  t.ok(await eventually(async () => (await b.call('account', 'spaces')).some((s) => s.key === games.key), 10000), 'b sees the board')
   t.is((await b.call(games.key, 'status')).policy, 'everything', 'kept whole too (F5)')
 
   const post = await b.call(games.key, 'put', 'post', { title: 'Chess?', text: '**who** plays' })

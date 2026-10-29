@@ -52,3 +52,12 @@ uses H1…).
   space setting "members may invite", a way to give the built-in `member` role more permissions per
   space, or a custom role allowed to invite to itself. The forum meanwhile invites as `friend` when it
   may, else as `member` (so a friend's friend can't invite yet).
+
+- **F7 — `space.subspaces()` lists a sub-space before `hg.space(key)` opens it.** On a member's
+  computer, right after the owner adds a board, `forum.subspaces()` already lists it while
+  `hg.space(board.key)` still throws `NOT_FOUND` ("No space … here") for a moment. Seen in about 1 run
+  in 4 of the full suite (b writes in the board as soon as `subspaces()` lists it). The docs say
+  "open one with hg.space(key) (members of the forum have it)". A page showing `subspaces()` as links
+  breaks on a quick click. `hg.spaces()` doesn't have the gap (it reads the same map as
+  `hg.space()`), so the forum lists boards from `hg.spaces()` filtered by `parent`. Wanted:
+  `subspaces()` lists only what `hg.space()` opens (or `hg.space()` opens anything listed).

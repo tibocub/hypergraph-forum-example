@@ -62,7 +62,7 @@ on two real computers.
 ## Phase 9: Trial
 
 - [ ] T028 Tibo + 4 friends, 2 weeks; at the end merge everyone's `delivery.jsonl`; SC-001 = 0 missing
-- [ ] T029 After hypergraph 013 merges: helpers in the allow-list + owner's settings field (FR-012)
+- [x] T029 After hypergraph 013 merges: helpers in the allow-list + owner's settings field (FR-012)
 
 ## Order
 
