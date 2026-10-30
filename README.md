@@ -23,11 +23,13 @@ TODOs (top = more priority):
 - Make the comment counter on posts count replies
 - Add sorting by date/vote/comments in boards (to sort posts) and by date/votes in posts (to sort comments). Default is chronological order
 - Make comments collapsible (collapse a comment and all its replies)
+- Remove the "new thread" from the boards and instead make a "new thread" button the top of the board that opens a page dedicated to writing the post
 - Searches, forum-wide and per-board (maybe only search for matches in posts titles and content, not comments and relies)
 - User pages (a bit like reddit a page where we can see all the posts and replies of a user, let a users put some info about themselves such as a small quote, some contact info, personnal websites, etc.) and a "Profile" link on the top right next to "People", "Log" and "Settings"
 - Multi forum support (in top left corner where the forum's name is currently displayed could be a drop-down menu that show joined forums and the buttons "join a forum" and "create a new forum", a bit like discord)
 - Maybe an optional custom CSS per forum
 - Create an admin panel and the ability to promote admins (same rights as the owner except promoting/depromoting users)
+- Let owner/admins ban accounts (and delete all their content) from the people page and/or the admin panel
 - Add a "signal" feature for users to signal problematic posts and comments to the moderation (signaled content notification shows in the admin panel)
 
 ## Install
