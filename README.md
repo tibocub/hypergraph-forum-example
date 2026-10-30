@@ -21,7 +21,6 @@ Features:
 TODOs (top = more priority):
 - Multi forum support (in top left corner where the forum's name is currently displayed could be a drop-down menu that show joined forums and the buttons "join a forum" and "create a new forum", a bit like discord)
 - Maybe an optional custom CSS per forum
-- Create an admin panel and the ability to promote admins (same rights as the owner except promoting/depromoting users)
 - Let owner/admins ban accounts (and delete all their content) from the people page and/or the admin panel
 - Add a "signal" feature for users to signal problematic posts and comments to the moderation (signaled content notification shows in the admin panel)
 

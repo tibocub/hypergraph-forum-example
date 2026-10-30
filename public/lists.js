@@ -60,9 +60,27 @@ export async function activity (call, spaces, identity) {
   return found.flat().sort((x, y) => y.stamp - x.stamp)
 }
 
-async function threadOf (call, space, r) {
+// The id of the thread a record is in (itself for a thread), or null if that was deleted.
+export async function threadOf (call, space, r) {
   while (r && r.type === 'comment') r = (await call(space, 'get', r.on)).record
   return r ? r.id : null
+}
+
+// What moderators hid or flagged in `spaces` and still is: the decisions
+// ({ action, by, at, reason, space, record }), newest first.
+// shortcut: reads each space's last 200 decisions, one get() per hide or flag (no query of hidden or
+// flagged records, F10); page with `after` if a forum ever has more.
+export async function moderated (call, spaces) {
+  const found = await Promise.all(spaces.map(async (space) => {
+    const seen = new Set()
+    const wanted = (await call(space, 'decisions', { limit: 200 })).items
+      .filter((d) => d.type === 'moderate' && (d.action === 'hide' || d.action === 'flag') && !seen.has(d.action + d.target) && seen.add(d.action + d.target))
+    return Promise.all(wanted.map(async (d) => {
+      const { record } = await call(space, 'get', d.target)
+      return record && record[d.action === 'hide' ? 'hidden' : 'flagged'] ? { ...d, space, record } : null
+    }))
+  }))
+  return found.flat().filter(Boolean).sort((x, y) => y.at - x.at)
 }
 
 // The comments on `id`, with their score. `sort`: 'old' (oldest first) or 'votes' (most first, then oldest).

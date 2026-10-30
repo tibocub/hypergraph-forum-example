@@ -79,3 +79,10 @@ uses H1…).
 - **F9 — Text search.** Search reads every thread of each board and matches title and text in the
   page. Fine for a friends' forum. Wanted: a word index over a type's text fields
   (`query('post').search('cats great').latest(20)`), so a board of thousands of threads can be searched.
+
+## Found while building the third round of to-dos (2026-10-30)
+
+- **F10 — A list of hidden or flagged records.** `query`, `linked`, `count` and `sum` leave hidden
+  records out, and nothing lists them, so the admin panel reads the last 200 decisions of each space and
+  `get()`s each hide or flag to see if it still holds. Wanted: `query(type).moderated('hidden' | 'flagged')`
+  (or `moderation({ hidden, flagged })`), so moderators see them all however old.

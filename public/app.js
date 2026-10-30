@@ -2,7 +2,7 @@
 // /api/call; the live channel says when to read again what is on screen.
 
 import { markdown } from './markdown.js'
-import { threads, replies, search, profileOf, activity } from './lists.js'
+import { threads, replies, search, profileOf, activity, moderated, threadOf } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -129,6 +129,7 @@ async function navBar () {
   $('#brand').textContent = me.forum.name || 'Forum'
   $('#boards').innerHTML = boards.map((b) => `<a href="#/b/${esc(b.key)}" class="${route[1] === b.key ? 'here' : ''}">${esc(b.name)}</a>`).join('')
   $('#links').hidden = false
+  $('#admin-link').hidden = !MODS.includes(await call(me.forum.key, 'getRole', me.identity))
   const peers = await call(me.forum.key, 'peers')
   $('#online').textContent = `${new Set(peers.map((p) => p.identity)).size} other(s) online`
 }
@@ -331,9 +332,9 @@ async function peopleScreen () {
     const [members, peers] = await Promise.all([call(me.forum.key, 'members'), call(me.forum.key, 'peers')])
     const online = new Set(peers.map((p) => p.identity))
     const rows = await Promise.all(members.map(async (m) => {
-      const them = !m.you && m.role !== 'owner'
+      const them = !m.you && m.role !== 'owner' && (role === 'owner' || m.role !== 'admin') // only the owner changes admins
       const actions = [
-        decides && them && m.role ? `<select data-act="role" aria-label="Role">${['admin', 'moderator', 'friend', 'member'].map((r) => `<option ${r === m.role ? 'selected' : ''}>${r}</option>`).join('')}</select>` : '',
+        decides && them && m.role ? `<select data-act="role" aria-label="Role">${(role === 'owner' ? ['admin', 'moderator', 'friend', 'member'] : ['moderator', 'friend', 'member']).map((r) => `<option ${r === m.role ? 'selected' : ''}>${r}</option>`).join('')}</select>` : '',
         MODS.includes(role) && them ? `<button class="link" data-act="${m.banned ? 'unban' : 'ban'}">${m.banned ? 'unban' : 'ban'}</button>` : '',
         decides && them && m.role ? '<button class="link" data-act="remove">remove</button>' : ''
       ].join(' ')
@@ -376,25 +377,64 @@ async function describe (d) {
   return esc(d.type)
 }
 
-// The forum's and every board's decisions, newest first.
+const forumSpaces = async () => [me.forum.key, ...(await call(me.forum.key, 'subspaces')).map((b) => b.key)]
+// A click on a [data-space][data-target] reveal button.
+const revealClick = (e) => {
+  const { space, target } = e.target.dataset
+  if (space && target) moderate(space, 'reveal', target, '').then(refresh, showError)
+}
+
 async function logScreen () {
   const mod = MODS.includes(await call(me.forum.key, 'getRole', me.identity))
-  const render = async () => {
-    const spaces = [me.forum.key, ...(await call(me.forum.key, 'subspaces')).map((b) => b.key)]
-    const lists = await Promise.all(spaces.map(async (space) => (await call(space, 'decisions', { limit: 50 })).items.map((d) => ({ ...d, space }))))
-    const all = lists.flat().sort((x, y) => y.at - x.at).slice(0, 100)
-    const rows = await Promise.all(all.map(async (d) => {
-      const reveal = mod && d.type === 'moderate' && d.action === 'hide' ? `<button class="link" data-space="${esc(d.space)}" data-target="${esc(d.target)}">reveal</button>` : ''
-      return `<div class="card">${esc(await nameOf(d.by))} ${await describe(d)} <span class="muted">· ${when(d.at)}${d.counted ? '' : ' · did not count'}</span> ${reveal}</div>`
-    }))
-    return rows.join('') || '<p class="muted">Nothing decided yet.</p>'
-  }
   $('#main').innerHTML = '<h1>Moderation log</h1><div id="log"></div>'
-  $('#log').onclick = (e) => {
-    const { space, target } = e.target.dataset
-    if (space) moderate(space, 'reveal', target, '').then(refresh, showError)
+  $('#log').onclick = revealClick
+  return { space: null, types: ['profile'], on: ['decisions'], render: () => logRows(mod), into: '#log' }
+}
+
+// The forum's and every board's decisions, newest first; `mod` adds reveal buttons.
+async function logRows (mod) {
+  const lists = await Promise.all((await forumSpaces()).map(async (space) => (await call(space, 'decisions', { limit: 50 })).items.map((d) => ({ ...d, space }))))
+  const all = lists.flat().sort((x, y) => y.at - x.at).slice(0, 100)
+  const rows = await Promise.all(all.map(async (d) => {
+    const reveal = mod && d.type === 'moderate' && d.action === 'hide' ? `<button class="link" data-space="${esc(d.space)}" data-target="${esc(d.target)}">reveal</button>` : ''
+    return `<div class="card">${esc(await nameOf(d.by))} ${await describe(d)} <span class="muted">· ${when(d.at)}${d.counted ? '' : ' · did not count'}</span> ${reveal}</div>`
+  }))
+  return rows.join('') || '<p class="muted">Nothing decided yet.</p>'
+}
+
+// Owner, admins and moderators: who is admin, what is hidden or flagged, the log.
+async function adminScreen () {
+  const role = await call(me.forum.key, 'getRole', me.identity)
+  if (!MODS.includes(role)) return peopleScreen()
+  const render = async () => {
+    const members = (await call(me.forum.key, 'members')).filter((m) => m.role)
+    const admins = await Promise.all(members.filter((m) => m.role === 'admin').map(async (m) =>
+      `<div data-who="${esc(m.identity)}">${await person(m.identity)} ${role === 'owner' ? '<button class="link" data-act="unadmin">no longer admin</button>' : ''}</div>`))
+    const others = role === 'owner' ? await Promise.all(members.filter((m) => !['owner', 'admin'].includes(m.role)).map(async (m) => `<option value="${esc(m.identity)}">${esc(await nameOf(m.identity))}</option>`)) : []
+    const items = await Promise.all((await moderated(call, await forumSpaces())).map(async (d) => {
+      const r = d.record
+      const thread = await threadOf(call, d.space, r)
+      const what = esc(r.title || (r.text.length > 120 ? r.text.slice(0, 120) + '…' : r.text))
+      return `<div class="card">${thread ? `<a href="#/t/${esc(d.space)}/${esc(thread)}">${what}</a>` : what}
+        <div class="muted">${d.action === 'hide' ? 'hidden' : 'flagged'} by ${esc(await nameOf(d.by))}${d.reason ? `: "${esc(d.reason)}"` : ''} · ${when(d.at)}
+        ${d.action === 'hide' ? `<button class="link" data-space="${esc(d.space)}" data-target="${esc(r.id)}">reveal</button>` : ''}</div></div>`
+    }))
+    return `<h2>Admins</h2><div class="card">${admins.join('') || '<span class="muted">None yet. An admin can do all the owner does but change who is admin.</span>'}
+      ${others.length ? `<div><select id="new-admin" aria-label="Member">${others.join('')}</select> <button data-act="admin">Make admin</button></div>` : ''}</div>
+      <h2>Hidden and flagged</h2>${items.join('') || '<p class="muted">Nothing.</p>'}
+      <h2>Log</h2>${await logRows(true)}`
   }
-  return { space: null, types: ['profile'], on: ['decisions'], render, into: '#log' }
+  $('#main').innerHTML = '<h1>Admin</h1><div id="admin"></div>'
+  $('#admin').onclick = async (e) => {
+    revealClick(e)
+    const what = e.target.dataset.act
+    try {
+      if (what === 'admin') await call(me.forum.key, 'setRole', $('#new-admin').value, 'admin')
+      if (what === 'unadmin') await call(me.forum.key, 'setRole', e.target.closest('[data-who]').dataset.who, 'friend')
+      if (what) refresh()
+    } catch (err) { showError(err) }
+  }
+  return { space: null, types: ['profile'], on: ['decisions', 'members'], render, into: '#admin' }
 }
 
 async function settingsScreen () {
@@ -477,6 +517,7 @@ async function show () {
   else if (route[0] === 'settings') screen = await settingsScreen()
   else if (route[0] === 'people') screen = await peopleScreen()
   else if (route[0] === 'log') screen = await logScreen()
+  else if (route[0] === 'admin') screen = await adminScreen()
   else return (location.hash = `#/b/${me.forum.key}`)
   lastHTML = ''
   await Promise.all([refresh(), navBar()])
