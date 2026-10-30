@@ -3,32 +3,33 @@
   :root { --bg: #1a1a19; --fg: #e8e8e3; --muted: #9a9a93; --line: #34342f; --accent: #7aa7ff; --card: #222220; }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 var(--font, system-ui, sans-serif); }
 header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
 header .brand { font-weight: 700; color: var(--fg); cursor: pointer; }
 .brand-menu { position: relative; }
 .menu { position: absolute; z-index: 1; min-width: 14em; display: grid; gap: 6px; }
 .menu .here { font-weight: 600; }
+.menu a[data-forum]::before { content: ''; display: inline-block; width: 0.7em; height: 0.7em; margin-right: 6px; border-radius: 50%; background: var(--dot, var(--accent)); }
+#logo { height: 28px; max-width: 120px; object-fit: contain; }
 nav { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
 nav a.here { font-weight: 600; text-decoration: underline; }
 main { max-width: 760px; margin: 0 auto; padding: 16px; }
-a { color: var(--accent); }
+a { color: var(--link, var(--accent)); }
 .muted { color: var(--muted); font-size: 0.9em; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 8px 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius, 6px); padding: 10px 12px; margin: 8px 0; }
 .thread-title { font-size: 1.1em; font-weight: 600; }
 .comment { border-left: 2px solid var(--line); padding-left: 10px; margin: 8px 0 8px 4px; }
 .votes button { min-width: 2em; }
 form { display: grid; gap: 8px; margin: 12px 0; }
-form.row { display: flex; flex-wrap: wrap; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
 form.row input { flex: 1; min-width: 10em; }
-input, textarea, select, button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+input, textarea, select, button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 6px 8px; }
 textarea { min-height: 6em; }
 button { cursor: pointer; }
-a.button { display: inline-block; text-decoration: none; background: var(--accent); color: var(--bg); border-radius: 4px; padding: 6px 12px; }
+a.button { display: inline-block; text-decoration: none; background: var(--accent); color: var(--bg); border-radius: var(--radius-sm, 4px); padding: 6px 12px; }
 button.link { border: 0; background: none; color: var(--accent); padding: 0 4px; }
 pre { overflow-x: auto; background: var(--bg); padding: 8px; }
 blockquote { margin: 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
 .words { font-family: monospace; font-size: 1.1em; }
 #error { position: fixed; bottom: 12px; left: 16px; right: 16px; margin: 0; padding: 10px; background: #b3261e; color: #fff; border-radius: 6px; }
-
 #error.ok { background: var(--accent); }

@@ -19,7 +19,6 @@ Features:
 - multi-device support
 
 TODOs (top = more priority):
-- Maybe an optional custom CSS per forum
 
 ## Install
 
@@ -44,7 +43,7 @@ browser. Then:
 
 Run the same line again to update. Your data is elsewhere (`.hypergraph-forum` in your home folder),
 so updating never touches it. Everyone in a forum should update at the same time: older versions refuse
-invites made by friends, the new profile fields and reports to moderators.
+invites made by friends, the new profile fields, reports to moderators and forum themes.
 
 
 ## Every day

@@ -98,3 +98,9 @@ uses H1…).
   panel lists and a moderator dismisses with `remove`. But a record is readable by every member, so
   everyone can see who reported what. Wanted: a member's flag (`flag` for anyone, counted per member),
   or records only moderators can read.
+
+- **F13 — Who may write a type.** A forum's `theme` should be written by the owner and admins only. A
+  type can say who may *edit* (`editable: { permission }`) but not who may *put*, so any member can put a
+  `theme`; the page reads the newest one whose author is owner or admin now, and skips the rest (the
+  last 50 only). Wanted: `put: { permission }` (or roles) on a type, refused at write and ignored at read
+  like other rules.

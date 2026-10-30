@@ -2,7 +2,8 @@
 // /api/call; the live channel says when to read again what is on screen.
 
 import { markdown } from './markdown.js'
-import { threads, replies, search, profileOf, activity, moderated, threadOf, ban, reports } from './lists.js'
+import { safeTheme, applyTheme, FONTS, CORNERS, LOGO_MAX } from './theme.js'
+import { threads, replies, search, profileOf, activity, moderated, threadOf, ban, reports, themeOf } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -60,6 +61,10 @@ async function nameOf (identity) {
   }
   return names.get(k)
 }
+let previewing = false // the theme form is showing an unsaved look
+const looks = new Map() // forum key -> its checked theme (a promise); cleared when a theme changes
+const lookOf = (forum) => looks.get(forum) || looks.set(forum, themeOf(call, forum)).get(forum)
+
 // A member's name, as a link to their page.
 const person = async (identity) => `<a href="#/u/${esc(identity)}">${esc(await nameOf(identity))}</a>`
 
@@ -139,8 +144,16 @@ async function navBar () {
   if (!me.forum) return
   const boards = [{ key: me.forum.key, name: 'General' }, ...(await call(me.forum.key, 'subspaces'))]
   $('#brand').textContent = me.forum.name || 'Forum'
-  $('#forums').innerHTML = me.forums.map((f) => `<a href="#/b/${esc(f.key)}" class="${f.key === me.forum.key ? 'here' : ''}">${esc(f.name || 'Forum')}</a>`).join('') +
+  $('#forums').innerHTML = me.forums.map((f) => `<a href="#/b/${esc(f.key)}" data-forum="${esc(f.key)}" class="${f.key === me.forum.key ? 'here' : ''}">${esc(f.name || 'Forum')}</a>`).join('') +
     '<hr><a href="#/join">Join a forum</a><a href="#/join/create">Create a forum</a>'
+  // Each forum's look: this one on the page, and each one's accent as its dot in the menu.
+  const looks = await Promise.all(me.forums.map((f) => lookOf(f.key)))
+  me.forums.forEach((f, i) => { if (looks[i].accent) $(`#forums a[data-forum="${f.key}"]`).style.setProperty('--dot', looks[i].accent) })
+  const look = await lookOf(me.forum.key)
+  if (previewing) return // the theme form shows its own
+  applyTheme(look)
+  $('#logo').hidden = !look.logo
+  if (look.logo) $('#logo').src = look.logo; else $('#logo').removeAttribute('src')
   $('#boards').innerHTML = boards.map((b) => `<a href="#/b/${esc(b.key)}" class="${route[1] === b.key ? 'here' : ''}">${esc(b.name)}</a>`).join('')
   $('#links').hidden = false
   $('#admin-link').hidden = !MODS.includes(await call(me.forum.key, 'getRole', me.identity))
@@ -428,6 +441,59 @@ async function banFlow (who, decides) {
   await ban(call, me.forum.key, await forumSpaces(), who, { reason, wipe })
 }
 
+// The forum's look (owner and admins): colours, a font and corners from lists, a small logo;
+// shown on the page as you change it, saved for everyone with Save.
+async function themeForm () {
+  const th = await lookOf(me.forum.key)
+  const colour = (name, label, fallback) => `<label>${label} <input type="color" name="${name}" value="${th[name] || fallback}"></label>`
+  const pick = (name, label, options) => `<label>${label} <select name="${name}">${Object.keys(options).map((o) => `<option ${th[name] === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>`
+  return `<form id="theme" class="card"><strong>This forum's look</strong>
+    <p class="muted">Seen by every member. Text that would be hard to read on the background is replaced by a readable one.</p>
+    <div class="row">${colour('bg', 'Background', '#fafaf8')}${colour('fg', 'Text', '#1d1d1b')}${colour('accent', 'Buttons', '#2a5db0')}${colour('link', 'Links', '#2a5db0')}</div>
+    <div class="row">${pick('font', 'Font', FONTS)}${pick('corner', 'Corners', CORNERS)}</div>
+    <label>Logo (PNG, JPEG or WebP, ${LOGO_MAX / 1000} KB at most) <input type="file" name="file" accept="image/png,image/jpeg,image/webp"></label>
+    <label><input type="checkbox" name="nologo"> No logo</label>
+    <div><button type="submit">Save</button> <button type="button" id="theme-reset">Reset to default</button></div></form>`
+}
+
+async function wireThemeForm () {
+  const form = $('#theme')
+  const current = await lookOf(me.forum.key)
+  let logo = null // base64 of a new file; null: keep the current one
+  const values = () => {
+    const v = Object.fromEntries(new FormData(form))
+    return { bg: v.bg, fg: v.fg, accent: v.accent, link: v.link, font: v.font, corner: v.corner, logo: v.nologo ? undefined : logo ?? current?.logo?.split(',')[1] }
+  }
+  const preview = async () => {
+    const th = safeTheme(values())
+    previewing = true
+    applyTheme(th)
+    $('#logo').hidden = !th.logo
+    if (th.logo) $('#logo').src = th.logo
+  }
+  form.addEventListener('input', () => preview())
+  form.file.addEventListener('change', () => {
+    const file = form.file.files[0]
+    if (!file) return
+    if (file.size > LOGO_MAX || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      form.file.value = ''
+      return showError(new Error(`A logo is a PNG, JPEG or WebP of ${LOGO_MAX / 1000} KB at most`))
+    }
+    const reader = new FileReader()
+    reader.onload = () => { logo = reader.result.split(',')[1]; preview() }
+    reader.readAsDataURL(file)
+  })
+  const save = async (th) => {
+    await call(me.forum.key, 'put', 'theme', th)
+    looks.clear()
+    previewing = false
+    await navBar()
+    showError(new Error('Saved for everyone.'), true)
+  }
+  onSubmit(form, () => save(Object.fromEntries(Object.entries(values()).filter(([, v]) => v))))
+  $('#theme-reset').onclick = () => save({}).then(show, showError)
+}
+
 // Owner, admins and moderators: who is admin, what is hidden or flagged, the log.
 async function adminScreen () {
   const role = await call(me.forum.key, 'getRole', me.identity)
@@ -465,7 +531,8 @@ async function adminScreen () {
       <h2>Hidden and flagged</h2>${items.join('') || '<p class="muted">Nothing.</p>'}
       <h2>Log</h2>${await logRows(true)}`
   }
-  $('#main').innerHTML = '<h1>Admin</h1><div id="admin"></div>'
+  $('#main').innerHTML = `<h1>Admin</h1>${role === 'moderator' ? '' : await themeForm()}<div id="admin"></div>`
+  if (role !== 'moderator') await wireThemeForm()
   $('#admin').onclick = async (e) => {
     revealClick(e)
     const what = e.target.dataset.act
@@ -564,6 +631,7 @@ async function pickForum () {
 async function show () {
   route = location.hash.replace(/^#\/?/, '').split('/')
   $('.brand-menu').open = false
+  previewing = false
   if (route[0] === 'join' || !me.forums.length) {
     screen = null
     joinScreen(route[1] === 'create')
@@ -600,6 +668,7 @@ const live = new EventSource('/api/events')
 live.addEventListener('change', (e) => {
   const { space, records } = JSON.parse(e.data)
   if (records.some((r) => r.type === 'profile')) names.clear()
+  if (records.some((r) => r.type === 'theme')) { looks.clear(); navBar().catch(showError) } // not soon(): it would cancel a pending refresh
   if (screen && (space === screen.space || !screen.space) && records.some((r) => screen.types.includes(r.type))) soon(refresh)
 })
 for (const name of ['members', 'decisions', 'peers', 'devices']) live.addEventListener(name, () => { if (screen?.on?.includes(name)) soon(refresh) })

@@ -1,6 +1,8 @@
 // What the page reads, built from hypergraph calls: `call(on, method, ...args)`
 // is the page's call (and the tests' peer.call).
 
+import { safeTheme } from './theme.js'
+
 // How many comments are under `id`, replies included.
 export async function commentCount (call, space, id) {
   const { items } = await call(space, 'linked', id, 'comment')
@@ -106,6 +108,15 @@ export async function reports (call, spaces) {
   const found = await Promise.all(spaces.map(async (space) => Promise.all((await all(call, space, 'report')).items
     .map(async (r) => ({ ...r, space, record: (await call(space, 'get', r.on)).record })))))
   return found.flat().sort((x, y) => y.stamp - x.stamp)
+}
+
+// The forum's look: the newest theme record by its owner or an admin, checked (safeTheme).
+// shortcut: anyone may put a `theme` and reads skip theirs (no write permission per type, F13);
+// reads the last 50, so 50 themes by others in a row hide the real one.
+export async function themeOf (call, forum) {
+  const { items } = await call(forum, 'query', { type: 'theme', limit: 50 })
+  for (const r of items) if (['owner', 'admin'].includes(await call(forum, 'getRole', r.author))) return safeTheme(r)
+  return {}
 }
 
 // The comments on `id`, with their score. `sort`: 'old' (oldest first) or 'votes' (most first, then oldest).
