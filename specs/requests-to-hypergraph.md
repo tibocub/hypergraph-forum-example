@@ -75,3 +75,7 @@ uses H1…).
   hundred threads. Wanted: a query ordered by a sum or count over what links to each record (e.g.
   `query('post').orderBy({ sum: ['vote', 'value'] }).latest(20)`), and a count through a chain of
   links (`count('comment', { under: post })`).
+
+- **F9 — Text search.** Search reads every thread of each board and matches title and text in the
+  page. Fine for a friends' forum. Wanted: a word index over a type's text fields
+  (`query('post').search('cats great').latest(20)`), so a board of thousands of threads can be searched.

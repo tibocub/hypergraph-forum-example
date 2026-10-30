@@ -3,7 +3,7 @@
 
 import test from 'brittle'
 import { forumOf } from './helpers.js'
-import { commentCount, threads, replies } from '../public/lists.js'
+import { commentCount, threads, replies, search } from '../public/lists.js'
 
 test('a thread\'s comment count includes replies', async (t) => {
   const { key, peers: [a] } = await forumOf(t, 'a')
@@ -37,5 +37,21 @@ test('a board sorts threads by date, votes or comments; a thread sorts comments 
   const texts = async (sort) => (await replies(a.call, key, talked.id, sort)).map((c) => c.text)
   t.alike(await texts(), ['first', 'second'], 'comments by date: oldest first (the default)')
   t.alike(await texts('votes'), ['second', 'first'], 'comments by votes')
+})
+
+test('search finds threads by title or text, in a board or the whole forum', async (t) => {
+  const { key, peers: [a] } = await forumOf(t, 'a')
+  const board = await a.call(key, 'createSubspace', { name: 'Talk' })
+  await a.call(key, 'put', 'post', { title: 'Cats', text: 'they are great' })
+  await a.call(key, 'put', 'post', { title: 'Dogs', text: 'better than CATS' })
+  await a.call(board.key, 'put', 'post', { title: 'More cats', text: '' })
+  const post = await a.call(key, 'put', 'post', { title: 'Birds', text: '' })
+  await a.call(key, 'put', 'comment', { on: post.id, text: 'cats eat them' })
+
+  const titles = async (spaces, words) => (await search(a.call, spaces, words)).map((p) => p.title)
+  t.alike(await titles([key], 'cats'), ['Dogs', 'Cats'], 'in a board: title or text, any case, not comments')
+  t.alike(await titles([key, board.key], 'cats'), ['More cats', 'Dogs', 'Cats'], 'forum-wide, newest first')
+  t.alike(await titles([key, board.key], 'cats great'), ['Cats'], 'every word must match')
+  t.is((await search(a.call, [board.key], 'cats'))[0].space, board.key, 'each result says its board')
 })
 

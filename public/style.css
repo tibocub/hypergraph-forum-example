@@ -16,7 +16,9 @@ a { color: var(--accent); }
 .comment { border-left: 2px solid var(--line); padding-left: 10px; margin: 8px 0 8px 4px; }
 .votes button { min-width: 2em; }
 form { display: grid; gap: 8px; margin: 12px 0; }
-input, textarea, button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+form.row { display: flex; flex-wrap: wrap; }
+form.row input { flex: 1; min-width: 10em; }
+input, textarea, select, button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
 textarea { min-height: 6em; }
 button { cursor: pointer; }
 button.link { border: 0; background: none; color: var(--accent); padding: 0 4px; }

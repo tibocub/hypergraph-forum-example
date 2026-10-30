@@ -34,6 +34,16 @@ export async function threads (call, board, { sort = 'new', limit = 20 } = {}) {
   return { items: rows.slice(0, limit), more: rows.length > limit, complete }
 }
 
+// The threads of `spaces` whose title or text has every word of `words` (any case), newest first.
+// shortcut: reads every thread (no text search in hypergraph, F9); fine for a friends' forum.
+export async function search (call, spaces, words) {
+  const terms = words.toLowerCase().split(/\s+/).filter(Boolean)
+  const found = await Promise.all(spaces.map(async (space) => (await all(call, space, 'post')).items
+    .filter((p) => terms.every((w) => `${p.title}\n${p.text}`.toLowerCase().includes(w)))
+    .map((p) => ({ ...p, space }))))
+  return found.flat().sort((x, y) => y.stamp - x.stamp)
+}
+
 // The comments on `id`, with their score. `sort`: 'old' (oldest first) or 'votes' (most first, then oldest).
 export async function replies (call, space, id, sort = 'old') {
   const { items } = await call(space, 'linked', id, 'comment')

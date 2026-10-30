@@ -2,7 +2,7 @@
 // /api/call; the live channel says when to read again what is on screen.
 
 import { markdown } from './markdown.js'
-import { threads, replies } from './lists.js'
+import { threads, replies, search } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -145,14 +145,39 @@ document.addEventListener('change', (e) => {
   if (which) { sorts[which] = e.target.value; refresh().catch(showError) }
 })
 
+// A search box: in `board`, or every board when "all boards" is picked. Call wireSearch once it is on the page.
+const wireSearch = (board) => onSubmit($('#search'), ({ q, where }) => { location.hash = `#/s/${where === 'all' ? 'all' : board}/${encodeURIComponent(q)}` })
+function searchForm (words = '', everywhere = false) {
+  return `<form id="search" class="row"><input name="q" required placeholder="Search threads" aria-label="Search threads" value="${esc(words)}">
+    <select name="where" aria-label="Where"><option value="board">this board</option><option value="all" ${everywhere ? 'selected' : ''}>all boards</option></select>
+    <button type="submit">Search</button></form>`
+}
+
+async function searchScreen (scope, words) {
+  const all = scope === 'all'
+  $('#main').innerHTML = `${searchForm(words, all)}<div id="results"></div>`
+  wireSearch(all ? me.forum.key : scope)
+  const render = async () => {
+    const boards = [{ key: me.forum.key, name: 'General' }, ...(await call(me.forum.key, 'subspaces'))]
+    const nameOfBoard = new Map(boards.map((b) => [b.key, b.name]))
+    const found = await search(call, all ? boards.map((b) => b.key) : [scope], words)
+    const rows = await Promise.all(found.map(async (p) => `<div class="card"><a class="thread-title" href="#/t/${esc(p.space)}/${esc(p.id)}">${esc(p.title)}</a>
+      <div class="muted">${esc(nameOfBoard.get(p.space) || '')} · ${esc(await nameOf(p.author))} · ${when(p.stamp)}</div></div>`))
+    return `<h1>${found.length} result(s) for “${esc(words)}”</h1>` + rows.join('')
+  }
+  return { space: all ? null : scope, types: ['post', 'profile'], render, into: '#results' }
+}
+
 async function boardScreen (board) {
   $('#main').innerHTML = `
+    ${searchForm()}
     <p>${sortMenu('board', { new: 'Newest', votes: 'Votes', comments: 'Comments' })}</p>
     <div id="list"></div><p><button id="more" hidden>More</button></p>
     <form id="post" class="card"><strong>New thread</strong>
       <input name="title" maxlength="300" placeholder="Title" required>
       <textarea name="text" placeholder="Text (**bold**, *italic*, [link](https://…), - lists)"></textarea>
       <button type="submit">Post</button></form>`
+  wireSearch(board)
   let shown = PAGE
   const render = async () => {
     const { items, more, complete } = await threads(call, board, { sort: sorts.board, limit: shown })
@@ -403,6 +428,7 @@ async function show () {
   route = location.hash.replace(/^#\/?/, '').split('/')
   if (route[0] === 'b' && route[1]) screen = await boardScreen(route[1])
   else if (route[0] === 't' && route[1] && route[2]) screen = await threadScreen(route[1], route[2])
+  else if (route[0] === 's' && route[1] && route[2]) screen = await searchScreen(route[1], decodeURIComponent(route[2]))
   else if (route[0] === 'settings') screen = await settingsScreen()
   else if (route[0] === 'people') screen = await peopleScreen()
   else if (route[0] === 'log') screen = await logScreen()
