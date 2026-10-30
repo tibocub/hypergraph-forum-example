@@ -2,8 +2,8 @@
 // counts, sorting, search, a person's page.
 
 import test from 'brittle'
-import { forumOf } from './helpers.js'
-import { commentCount, threads, replies, search } from '../public/lists.js'
+import { forumOf, eventually } from './helpers.js'
+import { commentCount, threads, replies, search, profileOf, activity } from '../public/lists.js'
 
 test('a thread\'s comment count includes replies', async (t) => {
   const { key, peers: [a] } = await forumOf(t, 'a')
@@ -53,5 +53,31 @@ test('search finds threads by title or text, in a board or the whole forum', asy
   t.alike(await titles([key, board.key], 'cats'), ['More cats', 'Dogs', 'Cats'], 'forum-wide, newest first')
   t.alike(await titles([key, board.key], 'cats great'), ['Cats'], 'every word must match')
   t.is((await search(a.call, [board.key], 'cats'))[0].space, board.key, 'each result says its board')
+})
+
+test('a person\'s page: their profile, and their threads and comments in every board', async (t) => {
+  const { key, peers: [a, b] } = await forumOf(t, 'a', 'b')
+  const ib = (await b.call('account', 'state')).identity
+  await b.call(key, 'put', 'profile', { name: 'Bea', quote: 'Hi!', contact: 'bea@example.com', websites: 'https://bea.example' })
+  t.alike(await eventually(async () => {
+    const p = await profileOf(a.call, key, ib)
+    return p.quote && [p.name, p.quote, p.contact, p.websites]
+  }, 10000), ['Bea', 'Hi!', 'bea@example.com', 'https://bea.example'], 'a reads b\'s profile, all its fields')
+
+  const board = await a.call(key, 'createSubspace', { name: 'Talk' })
+  t.ok(await eventually(async () => (await b.call(key, 'subspaces')).some((s) => s.key === board.key), 10000), 'b has the board')
+  const post = await a.call(board.key, 'put', 'post', { title: 'a\'s', text: '' })
+  const theirs = await b.call(key, 'put', 'post', { title: 'b\'s', text: '' })
+  t.ok(await eventually(async () => (await b.call(board.key, 'get', post.id)).record, 10000), 'b has a\'s thread')
+  const c1 = await b.call(board.key, 'put', 'comment', { on: post.id, text: 'nice' })
+  await b.call(board.key, 'put', 'comment', { on: c1.id, text: 'me again' })
+
+  const list = await eventually(async () => {
+    const l = await activity(a.call, [key, board.key], ib)
+    return l.length === 3 && l
+  }, 10000)
+  t.alike(list.map((r) => r.text || r.title), ['me again', 'nice', 'b\'s'], 'what b wrote, newest first, nothing of a\'s')
+  t.ok(list[0].thread === post.id && list[0].space === board.key, 'a reply knows its thread and board')
+  t.is(list[2].id, theirs.id, 'a thread is its own link')
 })
 

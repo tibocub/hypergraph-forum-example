@@ -44,6 +44,27 @@ export async function search (call, spaces, words) {
   return found.flat().sort((x, y) => y.stamp - x.stamp)
 }
 
+// A member's latest profile ({ name, quote, contact, websites }), or {}.
+export async function profileOf (call, forum, identity) {
+  return (await call(forum, 'query', { type: 'profile', by: identity, limit: 1 })).items[0] || {}
+}
+
+// What `identity` wrote in `spaces`, threads and comments, newest first, each with
+// its `space`; a comment also has `thread` (its thread's id, null if that was deleted).
+export async function activity (call, spaces, identity) {
+  const found = await Promise.all(spaces.map(async (space) => {
+    const [posts, comments] = await Promise.all(['post', 'comment'].map((type) => all(call, space, type, { by: identity })))
+    const withThread = await Promise.all(comments.items.map(async (c) => ({ ...c, thread: await threadOf(call, space, c) })))
+    return [...posts.items, ...withThread].map((r) => ({ ...r, space }))
+  }))
+  return found.flat().sort((x, y) => y.stamp - x.stamp)
+}
+
+async function threadOf (call, space, r) {
+  while (r && r.type === 'comment') r = (await call(space, 'get', r.on)).record
+  return r ? r.id : null
+}
+
 // The comments on `id`, with their score. `sort`: 'old' (oldest first) or 'votes' (most first, then oldest).
 export async function replies (call, space, id, sort = 'old') {
   const { items } = await call(space, 'linked', id, 'comment')

@@ -2,7 +2,7 @@
 // /api/call; the live channel says when to read again what is on screen.
 
 import { markdown } from './markdown.js'
-import { threads, replies, search } from './lists.js'
+import { threads, replies, search, profileOf, activity } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -58,6 +58,8 @@ async function nameOf (identity) {
   }
   return names.get(identity)
 }
+// A member's name, as a link to their page.
+const person = async (identity) => `<a href="#/u/${esc(identity)}">${esc(await nameOf(identity))}</a>`
 
 // --- screens ---
 
@@ -162,7 +164,7 @@ async function searchScreen (scope, words) {
     const nameOfBoard = new Map(boards.map((b) => [b.key, b.name]))
     const found = await search(call, all ? boards.map((b) => b.key) : [scope], words)
     const rows = await Promise.all(found.map(async (p) => `<div class="card"><a class="thread-title" href="#/t/${esc(p.space)}/${esc(p.id)}">${esc(p.title)}</a>
-      <div class="muted">${esc(nameOfBoard.get(p.space) || '')} · ${esc(await nameOf(p.author))} · ${when(p.stamp)}</div></div>`))
+      <div class="muted">${esc(nameOfBoard.get(p.space) || '')} · ${await person(p.author)} · ${when(p.stamp)}</div></div>`))
     return `<h1>${found.length} result(s) for “${esc(words)}”</h1>` + rows.join('')
   }
   return { space: all ? null : scope, types: ['post', 'profile'], render, into: '#results' }
@@ -182,7 +184,7 @@ async function boardScreen (board) {
   const render = async () => {
     const { items, more, complete } = await threads(call, board, { sort: sorts.board, limit: shown })
     const rows = await Promise.all(items.map(async (p) => `<div class="card"><a class="thread-title" href="#/t/${esc(board)}/${esc(p.id)}">${esc(p.title)}</a>
-        <div class="muted">${p.score} points · ${p.comments} comments · ${esc(await nameOf(p.author))} · ${when(p.stamp)}</div></div>`))
+        <div class="muted">${p.score} points · ${p.comments} comments · ${await person(p.author)} · ${when(p.stamp)}</div></div>`))
     $('#more').hidden = !more
     return (rows.join('') || '<p class="muted">No threads yet.</p>') + (complete ? '' : '<p class="muted">Still syncing…</p>')
   }
@@ -213,8 +215,8 @@ async function threadScreen (board, id) {
   // shortcut: one linked() call per comment, fine for a friends' forum; batch if threads reach hundreds of comments.
   const item = async (r) => {
     const fold = (open) => `<button class="link" data-act="fold" aria-expanded="${open}" aria-label="${open ? 'Collapse' : 'Expand'} this comment and its replies">[${open ? '−' : '+'}]</button>`
-    if (folded.has(r.id)) return `<div class="comment" data-id="${esc(r.id)}"><div class="muted">${fold(false)} ${esc(await nameOf(r.author))} · ${when(r.stamp)}</div></div>`
-    const [who, under] = await Promise.all([nameOf(r.author), replies(call, board, r.id, sorts.thread)])
+    if (folded.has(r.id)) return `<div class="comment" data-id="${esc(r.id)}"><div class="muted">${fold(false)} ${await person(r.author)} · ${when(r.stamp)}</div></div>`
+    const [who, under] = await Promise.all([person(r.author), replies(call, board, r.id, sorts.thread)])
     const mine = r.author === me.identity
     const body = (r.type === 'post' ? `<h1>${esc(r.title)}</h1>${markdown(r.text)}` : markdown(r.text)) +
       (r.hidden ? '<p class="muted">Hidden by moderators.</p>' : '') + (r.flagged ? '<p class="muted">Flagged for moderators.</p>' : '')
@@ -223,7 +225,7 @@ async function threadScreen (board, id) {
       <div class="muted votes">
         ${r.type === 'comment' ? fold(true) : ''}
         <button data-act="up" aria-label="Vote up">▲</button> ${r.score} <button data-act="down" aria-label="Vote down">▼</button>
-        · ${esc(who)} · ${when(r.stamp)}${r.edited ? ' · edited' : ''}
+        · ${who} · ${when(r.stamp)}${r.edited ? ' · edited' : ''}
         <button class="link" data-act="reply">reply</button>
         ${mine ? '<button class="link" data-act="edit">edit</button><button class="link" data-act="del">delete</button>' : ''}
         ${mod ? `<button class="link" data-act="${r.hidden ? 'reveal' : 'hide'}">${r.hidden ? 'reveal' : 'hide'}</button><button class="link" data-act="takedown">take down</button>` : ''}
@@ -277,6 +279,45 @@ async function edit (board, id, type) {
   await call(board, 'edit', id, changes)
 }
 
+// A member's page: their about-me, then what they wrote. Your own page edits it.
+async function userScreen (identity) {
+  const mine = identity === me.identity
+  const p = await profileOf(call, me.forum.key, identity)
+  const field = (name, label, max) => `<label>${label} <input name="${name}" maxlength="${max}" value="${esc(p[name])}"></label>`
+  $('#main').innerHTML = `<div id="about"></div>
+    ${mine ? `<details class="card"><summary>Edit my page</summary><form id="profile">
+      <label>Your name <input name="name" maxlength="40" required value="${esc(p.name)}"></label>
+      ${field('quote', 'A short quote', 300)}${field('contact', 'Contact', 300)}
+      <label>Websites (one per line) <textarea name="websites" maxlength="2000">${esc(p.websites)}</textarea></label>
+      <button type="submit">Save</button></form></details>` : ''}
+    <h2>Threads and comments</h2><div id="activity"></div>`
+  if (mine) {
+    onSubmit($('#profile'), async (fields) => {
+      await call(me.forum.key, 'put', 'profile', fields) // every field: the latest profile record is the whole page
+      names.delete(me.identity)
+      show()
+    })
+  }
+  // Only http(s) lines become links.
+  const site = (line) => /^https?:\/\//i.test(line) ? `<a href="${esc(line)}" rel="noopener noreferrer" target="_blank">${esc(line)}</a>` : esc(line)
+  $('#about').innerHTML = `<h1>${esc(p.name || identity.slice(0, 8))}</h1>
+    ${p.quote ? `<blockquote>${esc(p.quote)}</blockquote>` : ''}
+    ${p.contact ? `<p>Contact: ${esc(p.contact)}</p>` : ''}
+    ${(p.websites || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => `<div>${site(l)}</div>`).join('')}`
+  const render = async () => {
+    const boards = [{ key: me.forum.key, name: 'General' }, ...(await call(me.forum.key, 'subspaces'))]
+    const nameOfBoard = new Map(boards.map((b) => [b.key, b.name]))
+    const rows = (await activity(call, boards.map((b) => b.key), identity)).map((r) => {
+      const where = `${esc(nameOfBoard.get(r.space))} · ${when(r.stamp)}`
+      if (r.type === 'post') return `<div class="card"><a class="thread-title" href="#/t/${esc(r.space)}/${esc(r.id)}">${esc(r.title)}</a><div class="muted">${where}</div></div>`
+      const text = esc(r.text.length > 200 ? r.text.slice(0, 200) + '…' : r.text)
+      return `<div class="card">${r.thread ? `<a href="#/t/${esc(r.space)}/${esc(r.thread)}">${text}</a>` : text}<div class="muted">comment · ${where}</div></div>`
+    })
+    return rows.join('') || '<p class="muted">Nothing yet.</p>'
+  }
+  return { space: null, types: ['post', 'comment'], render, into: '#activity' }
+}
+
 async function peopleScreen () {
   const role = await call(me.forum.key, 'getRole', me.identity)
   const decides = role === 'owner' || role === 'admin'
@@ -291,7 +332,7 @@ async function peopleScreen () {
         decides && them && m.role ? '<button class="link" data-act="remove">remove</button>' : ''
       ].join(' ')
       const state = m.banned ? 'banned' : m.removed ? 'removed' : m.role
-      return `<div class="card" data-who="${esc(m.identity)}"><strong>${esc(await nameOf(m.identity))}</strong>
+      return `<div class="card" data-who="${esc(m.identity)}"><strong>${await person(m.identity)}</strong>
         <span class="muted">${esc(state)}${online.has(m.identity) ? ' · online' : ''}${m.you ? ' · you' : ''}</span> ${actions}</div>`
     }))
     return rows.join('')
@@ -355,7 +396,6 @@ async function settingsScreen () {
   const decides = role === 'owner' || role === 'admin'
   $('#main').innerHTML = `
     <h1>Settings</h1>
-    <form id="name" class="card"><label>Your name <input name="name" maxlength="40" required value="${esc(await nameOf(me.identity))}"></label><button type="submit">Save</button></form>
     <div class="card"><strong>Invite a friend</strong>
       <p class="muted">A code works once, for 7 days. Send it any way you like.</p>
       <p><button id="invite">Make a code</button></p><p class="words" id="code"></p></div>
@@ -388,10 +428,6 @@ async function settingsScreen () {
       refresh()
     } catch (err) { showError(err) }
   }
-  onSubmit($('#name'), async ({ name }) => {
-    await call(me.forum.key, 'put', 'profile', { name })
-    names.delete(me.identity)
-  })
   $('#invite').onclick = async () => {
     try {
       const code = await call(me.forum.key, 'createInvite', { role: 'friend', expires: Date.now() + 7 * 864e5 })
@@ -429,6 +465,7 @@ async function show () {
   if (route[0] === 'b' && route[1]) screen = await boardScreen(route[1])
   else if (route[0] === 't' && route[1] && route[2]) screen = await threadScreen(route[1], route[2])
   else if (route[0] === 's' && route[1] && route[2]) screen = await searchScreen(route[1], decodeURIComponent(route[2]))
+  else if (route[0] === 'u' && route[1]) screen = await userScreen(route[1] === 'me' ? me.identity : route[1])
   else if (route[0] === 'settings') screen = await settingsScreen()
   else if (route[0] === 'people') screen = await peopleScreen()
   else if (route[0] === 'log') screen = await logScreen()
