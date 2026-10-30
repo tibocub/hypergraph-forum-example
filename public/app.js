@@ -2,7 +2,7 @@
 // /api/call; the live channel says when to read again what is on screen.
 
 import { markdown } from './markdown.js'
-import { commentCount } from './lists.js'
+import { threads, replies } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -132,9 +132,21 @@ async function navBar () {
 }
 
 const PAGE = 20
+const sorts = { board: 'new', thread: 'old' } // kept while the page is open
+
+// A sort menu that redraws the screen on change.
+function sortMenu (which, options) {
+  return `<label class="muted">Sort <select data-sort="${which}">${Object.entries(options).map(([v, label]) =>
+    `<option value="${v}" ${sorts[which] === v ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`
+}
+document.addEventListener('change', (e) => {
+  const which = e.target.dataset?.sort
+  if (which) { sorts[which] = e.target.value; refresh().catch(showError) }
+})
 
 async function boardScreen (board) {
   $('#main').innerHTML = `
+    <p>${sortMenu('board', { new: 'Newest', votes: 'Votes', comments: 'Comments' })}</p>
     <div id="list"></div><p><button id="more" hidden>More</button></p>
     <form id="post" class="card"><strong>New thread</strong>
       <input name="title" maxlength="300" placeholder="Title" required>
@@ -142,13 +154,10 @@ async function boardScreen (board) {
       <button type="submit">Post</button></form>`
   let shown = PAGE
   const render = async () => {
-    const { items, complete } = await call(board, 'query', { type: 'post', limit: shown })
-    const rows = await Promise.all(items.map(async (p) => {
-      const [score, comments, who] = await Promise.all([call(board, 'sum', 'vote', 'value', { on: p.id }), commentCount(call, board, p.id), nameOf(p.author)])
-      return `<div class="card"><a class="thread-title" href="#/t/${esc(board)}/${esc(p.id)}">${esc(p.title)}</a>
-        <div class="muted">${score.value} points · ${comments} comments · ${esc(who)} · ${when(p.stamp)}</div></div>`
-    }))
-    $('#more').hidden = items.length < shown
+    const { items, more, complete } = await threads(call, board, { sort: sorts.board, limit: shown })
+    const rows = await Promise.all(items.map(async (p) => `<div class="card"><a class="thread-title" href="#/t/${esc(board)}/${esc(p.id)}">${esc(p.title)}</a>
+        <div class="muted">${p.score} points · ${p.comments} comments · ${esc(await nameOf(p.author))} · ${when(p.stamp)}</div></div>`))
+    $('#more').hidden = !more
     return (rows.join('') || '<p class="muted">No threads yet.</p>') + (complete ? '' : '<p class="muted">Still syncing…</p>')
   }
   $('#more').onclick = () => { shown += PAGE; refresh() }
@@ -161,7 +170,7 @@ async function boardScreen (board) {
 
 async function threadScreen (board, id) {
   const mod = MODS.includes(await call(me.forum.key, 'getRole', me.identity))
-  $('#main').innerHTML = `<div id="thread"></div>
+  $('#main').innerHTML = `<p>${sortMenu('thread', { old: 'Oldest comments first', votes: 'Most votes first' })}</p><div id="thread"></div>
     <form id="reply" class="card"><strong id="reply-to">Comment</strong>
       <textarea name="text" required></textarea>
       <div><button type="submit">Send</button> <button type="button" class="link" id="reply-reset" hidden>Comment on the thread instead</button></div></form>`
@@ -177,26 +186,25 @@ async function threadScreen (board, id) {
 
   // shortcut: one linked() call per comment, fine for a friends' forum; batch if threads reach hundreds of comments.
   const item = async (r) => {
-    const [score, who, replies] = await Promise.all([call(board, 'sum', 'vote', 'value', { on: r.id }), nameOf(r.author), call(board, 'linked', r.id, 'comment')])
-    replies.items.sort((x, y) => x.stamp - y.stamp)
+    const [who, under] = await Promise.all([nameOf(r.author), replies(call, board, r.id, sorts.thread)])
     const mine = r.author === me.identity
     const body = (r.type === 'post' ? `<h1>${esc(r.title)}</h1>${markdown(r.text)}` : markdown(r.text)) +
       (r.hidden ? '<p class="muted">Hidden by moderators.</p>' : '') + (r.flagged ? '<p class="muted">Flagged for moderators.</p>' : '')
     return `<div class="${r.type === 'post' ? 'card' : 'comment'}" data-id="${esc(r.id)}" data-type="${r.type}">
       ${body}
       <div class="muted votes">
-        <button data-act="up" aria-label="Vote up">▲</button> ${score.value} <button data-act="down" aria-label="Vote down">▼</button>
+        <button data-act="up" aria-label="Vote up">▲</button> ${r.score} <button data-act="down" aria-label="Vote down">▼</button>
         · ${esc(who)} · ${when(r.stamp)}${r.edited ? ' · edited' : ''}
         <button class="link" data-act="reply">reply</button>
         ${mine ? '<button class="link" data-act="edit">edit</button><button class="link" data-act="del">delete</button>' : ''}
         ${mod ? `<button class="link" data-act="${r.hidden ? 'reveal' : 'hide'}">${r.hidden ? 'reveal' : 'hide'}</button><button class="link" data-act="takedown">take down</button>` : ''}
       </div>
-      ${(await Promise.all(replies.items.map(item))).join('')}</div>`
+      ${(await Promise.all(under.map(item))).join('')}</div>`
   }
   const render = async () => {
     const { record, deleted } = await call(board, 'get', id)
     if (!record) return `<p class="muted">${deleted ? 'This thread was deleted.' : 'This thread isn\'t here yet: still syncing…'}</p>`
-    return item(record)
+    return item({ ...record, score: (await call(board, 'sum', 'vote', 'value', { on: id })).value })
   }
   $('#thread').onclick = async (e) => {
     const act = e.target.dataset.act

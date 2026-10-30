@@ -3,7 +3,7 @@
 
 import test from 'brittle'
 import { forumOf } from './helpers.js'
-import { commentCount } from '../public/lists.js'
+import { commentCount, threads, replies } from '../public/lists.js'
 
 test('a thread\'s comment count includes replies', async (t) => {
   const { key, peers: [a] } = await forumOf(t, 'a')
@@ -14,3 +14,28 @@ test('a thread\'s comment count includes replies', async (t) => {
   await a.call(key, 'put', 'comment', { on: post.id, text: '2' })
   t.is(await commentCount(a.call, key, post.id), 4, 'two comments, two replies')
 })
+
+test('a board sorts threads by date, votes or comments; a thread sorts comments by date or votes', async (t) => {
+  const { key, peers: [a] } = await forumOf(t, 'a')
+  const old = await a.call(key, 'put', 'post', { title: 'old', text: '' })
+  const liked = await a.call(key, 'put', 'post', { title: 'liked', text: '' })
+  const talked = await a.call(key, 'put', 'post', { title: 'talked', text: '' })
+  await a.call(key, 'put', 'vote', { on: liked.id, value: 1 })
+  await a.call(key, 'put', 'vote', { on: talked.id, value: -1 })
+  const first = await a.call(key, 'put', 'comment', { on: talked.id, text: 'first' })
+  const second = await a.call(key, 'put', 'comment', { on: talked.id, text: 'second' })
+  await a.call(key, 'put', 'comment', { on: first.id, text: 'reply' })
+  await a.call(key, 'put', 'vote', { on: second.id, value: 1 })
+
+  const titles = async (sort, limit) => (await threads(a.call, key, { sort, limit })).items.map((p) => p.title)
+  t.alike(await titles('new'), ['talked', 'liked', 'old'], 'by date: newest first (the default)')
+  t.alike(await titles('votes'), ['liked', 'old', 'talked'], 'by votes')
+  t.alike(await titles('comments'), ['talked', 'liked', 'old'], 'by comments, replies counted, then newest')
+  const page = await threads(a.call, key, { sort: 'votes', limit: 2 })
+  t.ok(page.items.length === 2 && page.more && page.items[0].score === 1 && page.items[1].comments === 0, 'a page, with score and count, and more to come')
+
+  const texts = async (sort) => (await replies(a.call, key, talked.id, sort)).map((c) => c.text)
+  t.alike(await texts(), ['first', 'second'], 'comments by date: oldest first (the default)')
+  t.alike(await texts('votes'), ['second', 'first'], 'comments by votes')
+})
+

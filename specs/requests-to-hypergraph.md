@@ -65,3 +65,13 @@ uses H1…).
   `hg.space()`), so the forum lists boards from `hg.spaces()` filtered by `parent`. Wanted:
   `subspaces()` lists only what `hg.space()` opens (or `hg.space()` opens anything listed).
   **Fixed (29e8423)**: listed once it opens (`spaces` fires then); the forum uses `subspaces()` again.
+
+## Found while building Tibo's to-dos (2026-10-30)
+
+- **F8 — Sorting by votes or comments, and a thread's comment count.** A board sorted by votes or by
+  comments has to read every thread, then each thread's score (`sum`) and its comments, then sort in
+  the page; a thread's comment count (replies included) is one `linked()` per comment, because
+  `count('comment', { on })` counts only direct links. Fine for a friends' forum, slow past a few
+  hundred threads. Wanted: a query ordered by a sum or count over what links to each record (e.g.
+  `query('post').orderBy({ sum: ['vote', 'value'] }).latest(20)`), and a count through a chain of
+  links (`count('comment', { under: post })`).
