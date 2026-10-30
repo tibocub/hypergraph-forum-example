@@ -2,7 +2,7 @@
 // /api/call; the live channel says when to read again what is on screen.
 
 import { markdown } from './markdown.js'
-import { threads, replies, search, profileOf, activity, moderated, threadOf, ban } from './lists.js'
+import { threads, replies, search, profileOf, activity, moderated, threadOf, ban, reports } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -18,8 +18,9 @@ async function call (on, method, ...args) {
   return json.result
 }
 
-function showError (err) {
+function showError (err, ok = false) {
   const box = $('#error')
+  box.classList.toggle('ok', ok)
   box.textContent = MESSAGES[err.code] || err.message
   box.hidden = false
   setTimeout(() => { box.hidden = true }, 6000)
@@ -221,7 +222,7 @@ async function threadScreen (board, id) {
         <button data-act="up" aria-label="Vote up">▲</button> ${r.score} <button data-act="down" aria-label="Vote down">▼</button>
         · ${who} · ${when(r.stamp)}${r.edited ? ' · edited' : ''}
         <button class="link" data-act="reply">reply</button>
-        ${mine ? '<button class="link" data-act="edit">edit</button><button class="link" data-act="del">delete</button>' : ''}
+        ${mine ? '<button class="link" data-act="edit">edit</button><button class="link" data-act="del">delete</button>' : '<button class="link" data-act="report">report</button>'}
         ${mod ? `<button class="link" data-act="${r.hidden ? 'reveal' : 'hide'}">${r.hidden ? 'reveal' : 'hide'}</button><button class="link" data-act="takedown">take down</button>` : ''}
       </div>
       ${(await Promise.all(under.map(item))).join('')}</div>`
@@ -240,6 +241,10 @@ async function threadScreen (board, id) {
       if (act === 'fold' && !folded.delete(rid)) folded.add(rid)
       if (act === 'up' || act === 'down') await call(board, 'put', 'vote', { on: rid, value: act === 'up' ? 1 : -1 })
       if (act === 'reply') { replyTo = rid; $('#reply-to').textContent = 'Reply'; $('#reply-reset').hidden = false; $('#reply textarea').focus() }
+      if (act === 'report') {
+        const reason = prompt('What is wrong with it? (the moderators see this, and so can any member)')
+        if (reason !== null) { await call(board, 'put', 'report', { on: rid, reason: reason.slice(0, 300) }); showError(new Error('Sent to the moderators. Thanks.'), true) }
+      }
       if (act === 'del' && confirm('Delete this for everyone?')) await call(board, 'del', rid)
       if (act === 'edit') return (location.hash = `#/edit/${board}/${rid}/${id}`)
       if (act === 'hide') await moderate(board, 'hide', rid, prompt('Why hide it? (shown in the log)'))
@@ -422,7 +427,17 @@ async function adminScreen () {
     const others = role === 'owner' ? await Promise.all(members.filter((m) => !['owner', 'admin'].includes(m.role)).map(option)) : []
     const rank = (r) => MODS.includes(r) ? MODS.length - MODS.indexOf(r) : 0 // owner 3, admin 2, moderator 1, anyone else 0
     const bannable = await Promise.all(members.filter((m) => rank(m.role) < rank(role)).map(option)) // hypergraph's rule: lower ranks only
-    const items = await Promise.all((await moderated(call, await forumSpaces())).map(async (d) => {
+    const spaces = await forumSpaces()
+    const reported = await Promise.all((await reports(call, spaces)).map(async (r) => {
+      const t = r.record
+      const thread = t && await threadOf(call, r.space, t)
+      const what = t ? esc(t.title || (t.text.length > 120 ? t.text.slice(0, 120) + '…' : t.text)) : '<span class="muted">(gone)</span>'
+      return `<div class="card">${thread ? `<a href="#/t/${esc(r.space)}/${esc(thread)}">${what}</a>` : what}
+        <div class="muted">reported by ${esc(await nameOf(r.author))}${r.reason ? `: "${esc(r.reason)}"` : ''} · ${when(r.stamp)}${t?.hidden ? ' · hidden' : ''}
+        ${t && !t.hidden ? `<button class="link" data-act="hide-reported" data-space="${esc(r.space)}" data-id="${esc(t.id)}" data-why="${esc(r.reason)}">hide it</button>` : ''}
+        <button class="link" data-act="dismiss" data-space="${esc(r.space)}" data-id="${esc(r.id)}">dismiss</button></div></div>`
+    }))
+    const items = await Promise.all((await moderated(call, spaces)).map(async (d) => {
       const r = d.record
       const thread = await threadOf(call, d.space, r)
       const what = esc(r.title || (r.text.length > 120 ? r.text.slice(0, 120) + '…' : r.text))
@@ -433,6 +448,7 @@ async function adminScreen () {
     return `<h2>Admins</h2><div class="card">${admins.join('') || '<span class="muted">None yet. An admin can do all the owner does but change who is admin.</span>'}
       ${others.length ? `<div><select id="new-admin" aria-label="Member">${others.join('')}</select> <button data-act="admin">Make admin</button></div>` : ''}</div>
       ${bannable.length ? `<h2>Ban</h2><div class="card"><select id="ban-who" aria-label="Member">${bannable.join('')}</select> <button data-act="ban">Ban…</button></div>` : ''}
+      <h2>Reported by members</h2>${reported.join('') || '<p class="muted">Nothing.</p>'}
       <h2>Hidden and flagged</h2>${items.join('') || '<p class="muted">Nothing.</p>'}
       <h2>Log</h2>${await logRows(true)}`
   }
@@ -442,12 +458,15 @@ async function adminScreen () {
     const what = e.target.dataset.act
     try {
       if (what === 'admin') await call(me.forum.key, 'setRole', $('#new-admin').value, 'admin')
+      const { space, id, why } = e.target.dataset
+      if (what === 'hide-reported') await moderate(space, 'hide', id, `reported: ${why}`)
+      if (what === 'dismiss') await moderate(space, 'remove', id, 'report dismissed')
       if (what === 'ban') await banFlow($('#ban-who').value, role !== 'moderator')
       if (what === 'unadmin') await call(me.forum.key, 'setRole', e.target.closest('[data-who]').dataset.who, 'friend')
       if (what) refresh()
     } catch (err) { showError(err) }
   }
-  return { space: null, types: ['profile'], on: ['decisions', 'members'], render, into: '#admin' }
+  return { space: null, types: ['profile', 'report'], on: ['decisions', 'members'], render, into: '#admin' }
 }
 
 async function settingsScreen () {

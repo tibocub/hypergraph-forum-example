@@ -100,6 +100,14 @@ export async function ban (call, forum, spaces, identity, { reason = '', wipe = 
   return n
 }
 
+// Members' reports in `spaces`, newest first, each with its `space` and `record` (what it is
+// about, null if that is gone). A moderator dismisses one by removing it.
+export async function reports (call, spaces) {
+  const found = await Promise.all(spaces.map(async (space) => Promise.all((await all(call, space, 'report')).items
+    .map(async (r) => ({ ...r, space, record: (await call(space, 'get', r.on)).record })))))
+  return found.flat().sort((x, y) => y.stamp - x.stamp)
+}
+
 // The comments on `id`, with their score. `sort`: 'old' (oldest first) or 'votes' (most first, then oldest).
 export async function replies (call, space, id, sort = 'old') {
   const { items } = await call(space, 'linked', id, 'comment')

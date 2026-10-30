@@ -92,3 +92,9 @@ uses H1…).
   theirs. The forum bans, then takes down each of their threads, comments and votes in every board, one
   `remove` decision each (a long log, and slow for a busy member). Wanted: `ban(someone, { drop: 'all' })`
   dropping everything they wrote, on every device, in the space and its sub-spaces, in one decision.
+
+- **F12 — Members report to the moderators.** `moderateAction('flag')` needs moderator rights, so it
+  can't be a member's report. The forum adds its own `report` record (`on`, `reason`), which the admin
+  panel lists and a moderator dismisses with `remove`. But a record is readable by every member, so
+  everyone can see who reported what. Wanted: a member's flag (`flag` for anyone, counted per member),
+  or records only moderators can read.

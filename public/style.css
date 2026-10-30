@@ -27,3 +27,5 @@ pre { overflow-x: auto; background: var(--bg); padding: 8px; }
 blockquote { margin: 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
 .words { font-family: monospace; font-size: 1.1em; }
 #error { position: fixed; bottom: 12px; left: 16px; right: 16px; margin: 0; padding: 10px; background: #b3261e; color: #fff; border-radius: 6px; }
+
+#error.ok { background: var(--accent); }
