@@ -4,7 +4,7 @@
 # Your data stays in ~/.hypergraph-forum: running this again only updates the program.
 set -e
 
-HYPERGRAPH_REF=29e8423a03c2fc70df3115a629c3b825c52dcd56 # the hypergraph commit every member runs
+HYPERGRAPH_REF=290a86acb7844ae6c13b597be00fc350637e8690 # the hypergraph commit every member runs
 FORUM_REF=origin/main
 APP="$HOME/hypergraph-forum-app"
 

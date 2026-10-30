@@ -86,21 +86,36 @@ uses H1…).
   records out, and nothing lists them, so the admin panel reads the last 200 decisions of each space and
   `get()`s each hide or flag to see if it still holds. Wanted: `query(type).moderated('hidden' | 'flagged')`
   (or `moderation({ hidden, flagged })`), so moderators see them all however old.
+  **Fixed (spec 014, 290a86a)**: `query(type).moderated('hidden' | 'flagged')`; the panel uses it. The list
+  doesn't say who hid it or why: the panel points to the log for that.
 
 - **F11 — Ban and delete everything they wrote.** `ban { from }` drops one log from one record on,
   so it can't take a member's whole history: other devices' logs and the boards (sub-spaces) keep
   theirs. The forum bans, then takes down each of their threads, comments and votes in every board, one
   `remove` decision each (a long log, and slow for a busy member). Wanted: `ban(someone, { drop: 'all' })`
   dropping everything they wrote, on every device, in the space and its sub-spaces, in one decision.
+  **Fixed (spec 014, 290a86a)**: `ban { drop: 'all' }`; the forum uses it. See F14.
 
 - **F12 — Members report to the moderators.** `moderateAction('flag')` needs moderator rights, so it
   can't be a member's report. The forum adds its own `report` record (`on`, `reason`), which the admin
   panel lists and a moderator dismisses with `remove`. But a record is readable by every member, so
   everyone can see who reported what. Wanted: a member's flag (`flag` for anyone, counted per member),
   or records only moderators can read.
+  **Fixed (spec 014, 290a86a)**: `report()` / `reports()`, sealed to the moderators of the moment. The forum's
+  own `report` type is unused but stays declared (removing a type breaks opening old data).
 
 - **F13 — Who may write a type.** A forum's `theme` should be written by the owner and admins only. A
   type can say who may *edit* (`editable: { permission }`) but not who may *put*, so any member can put a
   `theme`; the page reads the newest one whose author is owner or admin now, and skips the rest (the
   last 50 only). Wanted: `put: { permission }` (or roles) on a type, refused at write and ignored at read
   like other rules.
+  **Fixed (spec 014, 290a86a)**: `put: { permission: 'decide' }`. Adding `put` to `theme` would break old data,
+  so the look is a new type `look`; `theme` stays declared, unused.
+
+## Found while adopting spec 014 (2026-10-30)
+
+- **F14 — `ban { drop: 'all' }` resolves before the drop shows on the banning computer.** Right after the
+  call, a `query('post').by(them)` there still lists their threads (forum and board) for a moment, while
+  their comments and votes are gone already. The docs say every moderation call resolves once your app
+  applied it. Seen in `test/admin.test.js` (the test now waits). A moderator who bans and looks at once
+  sees the spam still there. Wanted: resolve once everything dropped is out of every list here.

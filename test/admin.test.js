@@ -3,7 +3,7 @@
 
 import test from 'brittle'
 import { forumOf, eventually, codeOf } from './helpers.js'
-import { moderated, ban, reports } from '../public/lists.js'
+import { moderated, reports } from '../public/lists.js'
 
 test('the owner makes and unmakes admins; an admin can\'t change who is admin', async (t) => {
   const { key, peers: [a, b, c] } = await forumOf(t, 'a', 'b', 'c')
@@ -32,10 +32,10 @@ test('the panel lists what moderators hid or flagged, until revealed', async (t)
   await a.call(key, 'moderateAction', 'hide', p1.id, { reason: 'rude' })
   await a.call(board.key, 'moderateAction', 'flag', p2.id, { reason: 'check' })
 
-  const list = async () => (await moderated(a.call, [key, board.key])).map((d) => `${d.action}:${d.record.title}:${d.reason}`).sort()
-  t.alike(await list(), ['flag:odd:check', 'hide:rude:rude'], 'both, with what and why')
+  const list = async () => (await moderated(a.call, [key, board.key])).map((d) => `${d.action}:${d.record.title}`).sort()
+  t.alike(await list(), ['flag:odd', 'hide:rude'], 'both, in the forum and a board (F10: moderated())')
   await a.call(key, 'moderateAction', 'reveal', p1.id)
-  t.alike(await list(), ['flag:odd:check'], 'revealed: off the list')
+  t.alike(await list(), ['flag:odd'], 'revealed: off the list')
 })
 
 test('ban, and delete everything they wrote, in every board, for everyone', async (t) => {
@@ -52,25 +52,27 @@ test('ban, and delete everything they wrote, in every board, for everyone', asyn
   const count = async (p, space, type) => (await p.call(space, 'query', { type, by: ic, limit: 50 })).items.length
   t.ok(await eventually(async () => (await count(a, key, 'post')) === 1 && (await count(a, board.key, 'post')) === 1 && (await count(a, key, 'comment')) === 1 && (await count(a, key, 'vote')) === 1, 10000), 'a has all of c\'s')
 
-  t.is(await ban(a.call, key, [key, board.key], ic, { reason: 'spam', wipe: true }), 4, 'banned, 4 records taken down')
+  await a.call(key, 'moderateAction', 'ban', ic, { reason: 'spam', drop: 'all' }) // F11: one decision
   const gone = async (p) => (await count(p, key, 'post')) + (await count(p, board.key, 'post')) + (await count(p, key, 'comment')) + (await count(p, key, 'vote')) === 0
-  t.ok(await gone(a), 'gone for a')
+  t.ok(await eventually(() => gone(a), 10000), 'gone for a') // not at once: threads linger a moment (F14)
   t.ok(await eventually(() => gone(b), 10000), 'gone for b')
   t.ok(await eventually(async () => (await b.call(key, 'sum', 'vote', 'value', { on: mine.id })).value === 0, 10000), 'their vote no longer counts')
   t.ok((await a.call(key, 'members')).find((m) => m.identity === ic).banned, 'and c is banned')
   t.ok((await b.call(key, 'get', mine.id)).record, 'b\'s thread stays')
 })
 
-test('a member reports a post or comment; moderators see it in the panel and dismiss it', async (t) => {
+test('a member reports a post or comment; only moderators read it; they dismiss it', async (t) => {
   const { key, peers: [a, b, c] } = await forumOf(t, 'a', 'b', 'c')
   const post = await b.call(key, 'put', 'post', { title: 'Hi', text: '' })
   const rude = await b.call(key, 'put', 'comment', { on: post.id, text: 'rude' })
   t.ok(await eventually(async () => (await c.call(key, 'get', rude.id)).record, 10000), 'c has the comment')
-  const report = await c.call(key, 'put', 'report', { on: rude.id, reason: 'insulting' })
-  t.is(await codeOf(c.call(key, 'put', 'report', { on: rude.id, reason: 'x'.repeat(301) })), 'RULE_REJECTED', 'a reason is 300 characters at most')
+  await c.call(key, 'report', rude.id, { reason: 'insulting' })
+  t.is(await codeOf(c.call(key, 'report', rude.id, { reason: 'x'.repeat(1001) })), 'INVALID_RECORD', 'a reason is 1,000 characters at most')
+  t.is(await codeOf(b.call(key, 'reports')), 'NOT_ALLOWED', 'a member can\'t read reports (F12: sealed to moderators)')
 
-  const list = async () => (await reports(a.call, [key])).map((r) => `${r.reason}:${r.record?.text}`)
+  const list = async () => (await reports(a.call, [key])).map((g) => `${g.reports.map((r) => r.reason)}:${g.record?.text}`)
   t.alike(await eventually(async () => { const l = await list(); return l.length && l }, 10000), ['insulting:rude'], 'a sees the report, with what it is about')
-  await a.call(key, 'moderateAction', 'remove', report.id, { reason: 'dealt with' })
+  const [group] = await reports(a.call, [key])
+  await a.call(key, 'moderateAction', 'remove', group.reports[0].id, { reason: 'dealt with' })
   t.alike(await list(), [], 'dismissed: off the list')
 })

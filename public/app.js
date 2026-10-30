@@ -3,7 +3,7 @@
 
 import { markdown } from './markdown.js'
 import { safeTheme, applyTheme, FONTS, CORNERS, LOGO_MAX } from './theme.js'
-import { threads, replies, search, profileOf, activity, moderated, threadOf, ban, reports, themeOf } from './lists.js'
+import { threads, replies, search, profileOf, activity, moderated, threadOf, reports, themeOf } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -268,8 +268,8 @@ async function threadScreen (board, id) {
       if (act === 'up' || act === 'down') await call(board, 'put', 'vote', { on: rid, value: act === 'up' ? 1 : -1 })
       if (act === 'reply') { replyTo = rid; $('#reply-to').textContent = 'Reply'; $('#reply-reset').hidden = false; $('#reply textarea').focus() }
       if (act === 'report') {
-        const reason = prompt('What is wrong with it? (the moderators see this, and so can any member)')
-        if (reason !== null) { await call(board, 'put', 'report', { on: rid, reason: reason.slice(0, 300) }); showError(new Error('Sent to the moderators. Thanks.'), true) }
+        const reason = prompt('What is wrong with it? (only the moderators see this)')
+        if (reason !== null) { await call(board, 'report', rid, { reason: reason.slice(0, 1000) }); showError(new Error('Sent to the moderators. Thanks.'), true) }
       }
       if (act === 'del' && confirm('Delete this for everyone?')) await call(board, 'del', rid)
       if (act === 'edit') return (location.hash = `#/edit/${board}/${rid}/${id}`)
@@ -438,7 +438,7 @@ async function banFlow (who, decides) {
   const reason = prompt(`Why ban ${await nameOf(who)}? (shown in the log)`)
   if (reason === null) return
   const wipe = decides && confirm('Also delete everything they wrote (threads, comments, votes), in every board, for everyone?')
-  await ban(call, me.forum.key, await forumSpaces(), who, { reason, wipe })
+  await call(me.forum.key, 'moderateAction', 'ban', who, wipe ? { reason, drop: 'all' } : { reason })
 }
 
 // The forum's look (owner and admins): colours, a font and corners from lists, a small logo;
@@ -484,7 +484,7 @@ async function wireThemeForm () {
     reader.readAsDataURL(file)
   })
   const save = async (th) => {
-    await call(me.forum.key, 'put', 'theme', th)
+    await call(me.forum.key, 'put', 'look', th)
     looks.clear()
     previewing = false
     await navBar()
@@ -507,27 +507,29 @@ async function adminScreen () {
     const rank = (r) => MODS.includes(r) ? MODS.length - MODS.indexOf(r) : 0 // owner 3, admin 2, moderator 1, anyone else 0
     const bannable = await Promise.all(members.filter((m) => rank(m.role) < rank(role)).map(option)) // hypergraph's rule: lower ranks only
     const spaces = await forumSpaces()
-    const reported = await Promise.all((await reports(call, spaces)).map(async (r) => {
-      const t = r.record
-      const thread = t && await threadOf(call, r.space, t)
+    const reported = await Promise.all((await reports(call, spaces)).map(async (g) => {
+      const t = g.record
+      const thread = t && await threadOf(call, g.space, t)
       const what = t ? esc(t.title || (t.text.length > 120 ? t.text.slice(0, 120) + '…' : t.text)) : '<span class="muted">(gone)</span>'
-      return `<div class="card">${thread ? `<a href="#/t/${esc(r.space)}/${esc(thread)}">${what}</a>` : what}
-        <div class="muted">reported by ${esc(await nameOf(r.author))}${r.reason ? `: "${esc(r.reason)}"` : ''} · ${when(r.stamp)}${t?.hidden ? ' · hidden' : ''}
-        ${t && !t.hidden ? `<button class="link" data-act="hide-reported" data-space="${esc(r.space)}" data-id="${esc(t.id)}" data-why="${esc(r.reason)}">hide it</button>` : ''}
-        <button class="link" data-act="dismiss" data-space="${esc(r.space)}" data-id="${esc(r.id)}">dismiss</button></div></div>`
+      const why = (await Promise.all(g.reports.map(async (r) => `${esc(await nameOf(r.by))}${r.reason ? `: "${esc(r.reason)}"` : ''}`))).join('; ')
+      return `<div class="card">${thread ? `<a href="#/t/${esc(g.space)}/${esc(thread)}">${what}</a>` : what}
+        <div class="muted">reported ${g.count > 1 ? `${g.count} times ` : ''}by ${why} · ${when(g.reports[0].stamp)}${t?.hidden ? ' · hidden' : ''}
+        ${t && !t.hidden ? `<button class="link" data-act="hide-reported" data-space="${esc(g.space)}" data-id="${esc(t.id)}" data-why="${esc(g.reports[0].reason)}">hide it</button>` : ''}
+        <button class="link" data-act="dismiss" data-space="${esc(g.space)}" data-id="${esc(g.reports.map((r) => r.id).join(' '))}">dismiss</button></div></div>`
     }))
     const items = await Promise.all((await moderated(call, spaces)).map(async (d) => {
       const r = d.record
       const thread = await threadOf(call, d.space, r)
       const what = esc(r.title || (r.text.length > 120 ? r.text.slice(0, 120) + '…' : r.text))
       return `<div class="card">${thread ? `<a href="#/t/${esc(d.space)}/${esc(thread)}">${what}</a>` : what}
-        <div class="muted">${d.action === 'hide' ? 'hidden' : 'flagged'} by ${esc(await nameOf(d.by))}${d.reason ? `: "${esc(d.reason)}"` : ''} · ${when(d.at)}
+        <div class="muted">${d.action === 'hide' ? 'hidden' : 'flagged'} · by ${await person(r.author)} · ${when(r.stamp)} <span class="muted">(why: see the log)</span>
         ${d.action === 'hide' ? `<button class="link" data-space="${esc(d.space)}" data-target="${esc(r.id)}">reveal</button>` : ''}</div></div>`
     }))
     return `<h2>Admins</h2><div class="card">${admins.join('') || '<span class="muted">None yet. An admin can do all the owner does but change who is admin.</span>'}
       ${others.length ? `<div><select id="new-admin" aria-label="Member">${others.join('')}</select> <button data-act="admin">Make admin</button></div>` : ''}</div>
       ${bannable.length ? `<h2>Ban</h2><div class="card"><select id="ban-who" aria-label="Member">${bannable.join('')}</select> <button data-act="ban">Ban…</button></div>` : ''}
-      <h2>Reported by members</h2>${reported.join('') || '<p class="muted">Nothing.</p>'}
+      <h2>Reported by members</h2><p class="muted">Only moderators read reports, and only those made while they were moderators.</p>
+      ${reported.join('') || '<p class="muted">Nothing.</p>'}
       <h2>Hidden and flagged</h2>${items.join('') || '<p class="muted">Nothing.</p>'}
       <h2>Log</h2>${await logRows(true)}`
   }
@@ -540,13 +542,13 @@ async function adminScreen () {
       if (what === 'admin') await call(me.forum.key, 'setRole', $('#new-admin').value, 'admin')
       const { space, id, why } = e.target.dataset
       if (what === 'hide-reported') await moderate(space, 'hide', id, `reported: ${why}`)
-      if (what === 'dismiss') await moderate(space, 'remove', id, 'report dismissed')
+      if (what === 'dismiss') for (const one of id.split(' ')) await moderate(space, 'remove', one, 'report dismissed')
       if (what === 'ban') await banFlow($('#ban-who').value, role !== 'moderator')
       if (what === 'unadmin') await call(me.forum.key, 'setRole', e.target.closest('[data-who]').dataset.who, 'friend')
       if (what) refresh()
     } catch (err) { showError(err) }
   }
-  return { space: null, types: ['profile', 'report'], on: ['decisions', 'members'], render, into: '#admin' }
+  return { space: null, types: ['profile', 'hg/report'], on: ['decisions', 'members'], render, into: '#admin' }
 }
 
 async function settingsScreen () {
@@ -668,7 +670,7 @@ const live = new EventSource('/api/events')
 live.addEventListener('change', (e) => {
   const { space, records } = JSON.parse(e.data)
   if (records.some((r) => r.type === 'profile')) names.clear()
-  if (records.some((r) => r.type === 'theme')) { looks.clear(); navBar().catch(showError) } // not soon(): it would cancel a pending refresh
+  if (records.some((r) => r.type === 'look')) { looks.clear(); navBar().catch(showError) } // not soon(): it would cancel a pending refresh
   if (screen && (space === screen.space || !screen.space) && records.some((r) => screen.types.includes(r.type))) soon(refresh)
 })
 for (const name of ['members', 'decisions', 'peers', 'devices']) live.addEventListener(name, () => { if (screen?.on?.includes(name)) soon(refresh) })

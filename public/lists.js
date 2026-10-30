@@ -68,55 +68,25 @@ export async function threadOf (call, space, r) {
   return r ? r.id : null
 }
 
-// What moderators hid or flagged in `spaces` and still is: the decisions
-// ({ action, by, at, reason, space, record }), newest first.
-// shortcut: reads each space's last 200 decisions, one get() per hide or flag (no query of hidden or
-// flagged records, F10); page with `after` if a forum ever has more.
+// What moderators hid or flagged in `spaces` and still is: [{ action: 'hide' | 'flag', space, record }],
+// newest record first.
 export async function moderated (call, spaces) {
-  const found = await Promise.all(spaces.map(async (space) => {
-    const seen = new Set()
-    const wanted = (await call(space, 'decisions', { limit: 200 })).items
-      .filter((d) => d.type === 'moderate' && (d.action === 'hide' || d.action === 'flag') && !seen.has(d.action + d.target) && seen.add(d.action + d.target))
-    return Promise.all(wanted.map(async (d) => {
-      const { record } = await call(space, 'get', d.target)
-      return record && record[d.action === 'hide' ? 'hidden' : 'flagged'] ? { ...d, space, record } : null
-    }))
-  }))
-  return found.flat().filter(Boolean).sort((x, y) => y.at - x.at)
+  const found = await Promise.all(spaces.flatMap((space) => ['post', 'comment'].flatMap((type) => [['hide', 'hidden'], ['flag', 'flagged']]
+    .map(async ([action, state]) => (await all(call, space, type, { moderated: state })).items.map((record) => ({ action, space, record }))))))
+  return found.flat().sort((x, y) => y.record.stamp - x.record.stamp)
 }
 
-// Bans `identity` from `forum`; with `wipe`, also takes down every thread, comment and vote of
-// theirs in `spaces`. Returns how many were taken down.
-// shortcut: one remove per record (no bulk take-down in hypergraph, F11); fine for a friends' forum.
-export async function ban (call, forum, spaces, identity, { reason = '', wipe = false } = {}) {
-  await call(forum, 'moderateAction', 'ban', identity, { reason })
-  let n = 0
-  for (const space of wipe ? spaces : []) {
-    for (const type of ['post', 'comment', 'vote']) {
-      for (const r of (await all(call, space, type, { by: identity })).items) {
-        await call(space, 'moderateAction', 'remove', r.id, { reason })
-        n++
-      }
-    }
-  }
-  return n
-}
-
-// Members' reports in `spaces`, newest first, each with its `space` and `record` (what it is
-// about, null if that is gone). A moderator dismisses one by removing it.
+// Members' reports in `spaces` (moderators only), grouped by what they are about, most recently
+// reported first: [{ space, on, record (null if gone), count, reports: [{ id, by, reason, stamp }] }].
 export async function reports (call, spaces) {
-  const found = await Promise.all(spaces.map(async (space) => Promise.all((await all(call, space, 'report')).items
-    .map(async (r) => ({ ...r, space, record: (await call(space, 'get', r.on)).record })))))
-  return found.flat().sort((x, y) => y.stamp - x.stamp)
+  const found = await Promise.all(spaces.map(async (space) => Promise.all((await call(space, 'reports')).items
+    .map(async (g) => ({ ...g, space, record: (await call(space, 'get', g.on)).record })))))
+  return found.flat().sort((x, y) => y.reports[0].stamp - x.reports[0].stamp)
 }
 
-// The forum's look: the newest theme record by its owner or an admin, checked (safeTheme).
-// shortcut: anyone may put a `theme` and reads skip theirs (no write permission per type, F13);
-// reads the last 50, so 50 themes by others in a row hide the real one.
+// The forum's look: its latest `look` (only owner and admins may put one), checked (safeTheme).
 export async function themeOf (call, forum) {
-  const { items } = await call(forum, 'query', { type: 'theme', limit: 50 })
-  for (const r of items) if (['owner', 'admin'].includes(await call(forum, 'getRole', r.author))) return safeTheme(r)
-  return {}
+  return safeTheme((await call(forum, 'query', { type: 'look', limit: 1 })).items[0])
 }
 
 // The comments on `id`, with their score. `sort`: 'old' (oldest first) or 'votes' (most first, then oldest).

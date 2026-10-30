@@ -2,7 +2,7 @@
 // other peers; only owner and admins' themes count.
 
 import test from 'brittle'
-import { forumOf, eventually } from './helpers.js'
+import { forumOf, eventually, codeOf } from './helpers.js'
 import { safeTheme, contrast } from '../public/theme.js'
 import { themeOf } from '../public/lists.js'
 
@@ -35,17 +35,17 @@ test('a good theme applies; anything else falls back to the default', (t) => {
 test('only the owner and admins set the forum\'s theme; every member reads the same', async (t) => {
   const { key, peers: [a, b, c] } = await forumOf(t, 'a', 'b', 'c')
   const ib = (await b.call('account', 'state')).identity
-  await c.call(key, 'put', 'theme', { accent: '#ff0000' })
-  t.alike(await themeOf(a.call, key), {}, 'a friend\'s theme is ignored')
+  t.is(await codeOf(c.call(key, 'put', 'look', { accent: '#ff0000' })), 'NOT_ALLOWED', 'a friend can\'t put one (F13: put permission)')
+  t.alike(await themeOf(a.call, key), {}, 'none yet: the default')
 
-  await a.call(key, 'put', 'theme', { accent: '#00aa00', font: 'mono' })
+  await a.call(key, 'put', 'look', { accent: '#00aa00', font: 'mono' })
   t.alike(await eventually(async () => { const th = await themeOf(c.call, key); return th.accent && th }, 10000), { accent: '#00aa00', font: 'mono' }, 'the owner\'s, as c reads it')
 
   await a.call(key, 'setRole', ib, 'admin')
   t.ok(await eventually(async () => (await b.call(key, 'getRole', ib)) === 'admin', 10000), 'b is admin')
-  await b.call(key, 'put', 'theme', { accent: '#0000aa', corner: 'square' })
+  await b.call(key, 'put', 'look', { accent: '#0000aa', corner: 'square' })
   t.alike(await eventually(async () => { const th = await themeOf(c.call, key); return th.accent === '#0000aa' && th }, 10000), { accent: '#0000aa', corner: 'square' }, 'an admin\'s newer one wins')
 
-  await b.call(key, 'put', 'theme', {})
+  await b.call(key, 'put', 'look', {})
   t.alike(await eventually(async () => { const th = await themeOf(c.call, key); return !th.accent && th }, 10000), {}, 'reset to the default')
 })
