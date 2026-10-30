@@ -119,3 +119,4 @@ uses H1…).
   their comments and votes are gone already. The docs say every moderation call resolves once your app
   applied it. Seen in `test/admin.test.js` (the test now waits). A moderator who bans and looks at once
   sees the spam still there. Wanted: resolve once everything dropped is out of every list here.
+  **Fixed (hypergraph afae42b)**: a decision resolves once its cuts show, in every board open here.
