@@ -44,7 +44,7 @@ browser. Then:
 
 Run the same line again to update. Your data is elsewhere (`.hypergraph-forum` in your home folder),
 so updating never touches it. Everyone in a forum should update at the same time: older versions refuse
-invites made by friends and the new profile fields.
+invites made by friends, the new profile fields and reports to moderators.
 
 
 ## Every day
