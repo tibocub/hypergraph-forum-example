@@ -2,7 +2,7 @@
 // /api/call; the live channel says when to read again what is on screen.
 
 import { markdown } from './markdown.js'
-import { threads, replies, search, profileOf, activity, moderated, threadOf } from './lists.js'
+import { threads, replies, search, profileOf, activity, moderated, threadOf, ban } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -352,7 +352,7 @@ async function peopleScreen () {
     const who = el.dataset.who
     try {
       if (what === 'role') await call(me.forum.key, 'setRole', who, e.target.value)
-      if (what === 'ban') await moderate(me.forum.key, 'ban', who, prompt('Why ban them? (shown in the log)'))
+      if (what === 'ban') await banFlow(who, decides)
       if (what === 'unban') await moderate(me.forum.key, 'unban', who, '')
       if (what === 'remove' && confirm('Take them out of the forum? What they wrote stays.')) await call(me.forum.key, 'removeRole', who)
       refresh()
@@ -402,6 +402,14 @@ async function logRows (mod) {
   return rows.join('') || '<p class="muted">Nothing decided yet.</p>'
 }
 
+// Asks why, and (owner and admins) whether to delete everything they wrote, then bans.
+async function banFlow (who, decides) {
+  const reason = prompt(`Why ban ${await nameOf(who)}? (shown in the log)`)
+  if (reason === null) return
+  const wipe = decides && confirm('Also delete everything they wrote (threads, comments, votes), in every board, for everyone?')
+  await ban(call, me.forum.key, await forumSpaces(), who, { reason, wipe })
+}
+
 // Owner, admins and moderators: who is admin, what is hidden or flagged, the log.
 async function adminScreen () {
   const role = await call(me.forum.key, 'getRole', me.identity)
@@ -410,7 +418,10 @@ async function adminScreen () {
     const members = (await call(me.forum.key, 'members')).filter((m) => m.role)
     const admins = await Promise.all(members.filter((m) => m.role === 'admin').map(async (m) =>
       `<div data-who="${esc(m.identity)}">${await person(m.identity)} ${role === 'owner' ? '<button class="link" data-act="unadmin">no longer admin</button>' : ''}</div>`))
-    const others = role === 'owner' ? await Promise.all(members.filter((m) => !['owner', 'admin'].includes(m.role)).map(async (m) => `<option value="${esc(m.identity)}">${esc(await nameOf(m.identity))}</option>`)) : []
+    const option = async (m) => `<option value="${esc(m.identity)}">${esc(await nameOf(m.identity))}</option>`
+    const others = role === 'owner' ? await Promise.all(members.filter((m) => !['owner', 'admin'].includes(m.role)).map(option)) : []
+    const rank = (r) => MODS.includes(r) ? MODS.length - MODS.indexOf(r) : 0 // owner 3, admin 2, moderator 1, anyone else 0
+    const bannable = await Promise.all(members.filter((m) => rank(m.role) < rank(role)).map(option)) // hypergraph's rule: lower ranks only
     const items = await Promise.all((await moderated(call, await forumSpaces())).map(async (d) => {
       const r = d.record
       const thread = await threadOf(call, d.space, r)
@@ -421,6 +432,7 @@ async function adminScreen () {
     }))
     return `<h2>Admins</h2><div class="card">${admins.join('') || '<span class="muted">None yet. An admin can do all the owner does but change who is admin.</span>'}
       ${others.length ? `<div><select id="new-admin" aria-label="Member">${others.join('')}</select> <button data-act="admin">Make admin</button></div>` : ''}</div>
+      ${bannable.length ? `<h2>Ban</h2><div class="card"><select id="ban-who" aria-label="Member">${bannable.join('')}</select> <button data-act="ban">Ban…</button></div>` : ''}
       <h2>Hidden and flagged</h2>${items.join('') || '<p class="muted">Nothing.</p>'}
       <h2>Log</h2>${await logRows(true)}`
   }
@@ -430,6 +442,7 @@ async function adminScreen () {
     const what = e.target.dataset.act
     try {
       if (what === 'admin') await call(me.forum.key, 'setRole', $('#new-admin').value, 'admin')
+      if (what === 'ban') await banFlow($('#ban-who').value, role !== 'moderator')
       if (what === 'unadmin') await call(me.forum.key, 'setRole', e.target.closest('[data-who]').dataset.who, 'friend')
       if (what) refresh()
     } catch (err) { showError(err) }

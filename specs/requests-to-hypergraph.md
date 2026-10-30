@@ -86,3 +86,9 @@ uses H1…).
   records out, and nothing lists them, so the admin panel reads the last 200 decisions of each space and
   `get()`s each hide or flag to see if it still holds. Wanted: `query(type).moderated('hidden' | 'flagged')`
   (or `moderation({ hidden, flagged })`), so moderators see them all however old.
+
+- **F11 — Ban and delete everything they wrote.** `ban { from }` drops one log from one record on,
+  so it can't take a member's whole history: other devices' logs and the boards (sub-spaces) keep
+  theirs. The forum bans, then takes down each of their threads, comments and votes in every board, one
+  `remove` decision each (a long log, and slow for a busy member). Wanted: `ban(someone, { drop: 'all' })`
+  dropping everything they wrote, on every device, in the space and its sub-spaces, in one decision.

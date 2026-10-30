@@ -83,6 +83,23 @@ export async function moderated (call, spaces) {
   return found.flat().filter(Boolean).sort((x, y) => y.at - x.at)
 }
 
+// Bans `identity` from `forum`; with `wipe`, also takes down every thread, comment and vote of
+// theirs in `spaces`. Returns how many were taken down.
+// shortcut: one remove per record (no bulk take-down in hypergraph, F11); fine for a friends' forum.
+export async function ban (call, forum, spaces, identity, { reason = '', wipe = false } = {}) {
+  await call(forum, 'moderateAction', 'ban', identity, { reason })
+  let n = 0
+  for (const space of wipe ? spaces : []) {
+    for (const type of ['post', 'comment', 'vote']) {
+      for (const r of (await all(call, space, type, { by: identity })).items) {
+        await call(space, 'moderateAction', 'remove', r.id, { reason })
+        n++
+      }
+    }
+  }
+  return n
+}
+
 // The comments on `id`, with their score. `sort`: 'old' (oldest first) or 'votes' (most first, then oldest).
 export async function replies (call, space, id, sort = 'old') {
   const { items } = await call(space, 'linked', id, 'comment')

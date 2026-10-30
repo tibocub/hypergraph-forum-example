@@ -3,7 +3,7 @@
 
 import test from 'brittle'
 import { forumOf, eventually, codeOf } from './helpers.js'
-import { moderated } from '../public/lists.js'
+import { moderated, ban } from '../public/lists.js'
 
 test('the owner makes and unmakes admins; an admin can\'t change who is admin', async (t) => {
   const { key, peers: [a, b, c] } = await forumOf(t, 'a', 'b', 'c')
@@ -36,4 +36,27 @@ test('the panel lists what moderators hid or flagged, until revealed', async (t)
   t.alike(await list(), ['flag:odd:check', 'hide:rude:rude'], 'both, with what and why')
   await a.call(key, 'moderateAction', 'reveal', p1.id)
   t.alike(await list(), ['flag:odd:check'], 'revealed: off the list')
+})
+
+test('ban, and delete everything they wrote, in every board, for everyone', async (t) => {
+  const { key, peers: [a, b, c] } = await forumOf(t, 'a', 'b', 'c')
+  const ic = (await c.call('account', 'state')).identity
+  const board = await a.call(key, 'createSubspace', { name: 'Talk' })
+  t.ok(await eventually(async () => (await c.call(key, 'subspaces')).some((s) => s.key === board.key), 10000), 'c has the board')
+  const mine = await b.call(key, 'put', 'post', { title: 'b stays', text: '' })
+  t.ok(await eventually(async () => (await c.call(key, 'get', mine.id)).record, 10000), 'c has b\'s thread')
+  await c.call(key, 'put', 'post', { title: 'spam 1', text: '' })
+  await c.call(board.key, 'put', 'post', { title: 'spam 2', text: '' })
+  await c.call(key, 'put', 'comment', { on: mine.id, text: 'spam 3' })
+  await c.call(key, 'put', 'vote', { on: mine.id, value: -1 })
+  const count = async (p, space, type) => (await p.call(space, 'query', { type, by: ic, limit: 50 })).items.length
+  t.ok(await eventually(async () => (await count(a, key, 'post')) === 1 && (await count(a, board.key, 'post')) === 1 && (await count(a, key, 'comment')) === 1 && (await count(a, key, 'vote')) === 1, 10000), 'a has all of c\'s')
+
+  t.is(await ban(a.call, key, [key, board.key], ic, { reason: 'spam', wipe: true }), 4, 'banned, 4 records taken down')
+  const gone = async (p) => (await count(p, key, 'post')) + (await count(p, board.key, 'post')) + (await count(p, key, 'comment')) + (await count(p, key, 'vote')) === 0
+  t.ok(await gone(a), 'gone for a')
+  t.ok(await eventually(() => gone(b), 10000), 'gone for b')
+  t.ok(await eventually(async () => (await b.call(key, 'sum', 'vote', 'value', { on: mine.id })).value === 0, 10000), 'their vote no longer counts')
+  t.ok((await a.call(key, 'members')).find((m) => m.identity === ic).banned, 'and c is banned')
+  t.ok((await b.call(key, 'get', mine.id)).record, 'b\'s thread stays')
 })
