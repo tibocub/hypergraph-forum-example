@@ -4,7 +4,7 @@
 # Written for Windows PowerShell 5.1 (no && or ternaries).
 
 $ErrorActionPreference = 'Stop'
-$HypergraphRef = 'fb1b9e0e382a2ac364b48fbb2fad6dc16651c0d9' # the hypergraph commit every member runs
+$HypergraphRef = '29e8423a03c2fc70df3115a629c3b825c52dcd56' # the hypergraph commit every member runs
 $ForumRef = 'origin/main'
 $App = Join-Path $HOME 'hypergraph-forum-app'
 

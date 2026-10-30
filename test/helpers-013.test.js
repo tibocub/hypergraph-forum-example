@@ -21,7 +21,7 @@ test('the owner lists helpers; members see them; the forum works with the helper
   const board = await a.call(key, 'createSubspace', { name: 'Talk' })
   t.is(await codeOf(a.call(board.key, 'setHelpers', [helper])), 'NOT_ALLOWED', 'boards use the forum\'s helpers')
 
-  t.ok(await eventually(async () => (await b.call('account', 'spaces')).some((s) => s.key === board.key), 10000), 'b has the board')
+  t.ok(await eventually(async () => (await b.call(key, 'subspaces')).some((s) => s.key === board.key), 10000), 'b has the board')
   const post = await b.call(board.key, 'put', 'post', { title: 'still works', text: '' })
   t.ok(await eventually(async () => (await a.call(board.key, 'get', post.id)).record, 10000), 'posts still arrive with the helper down')
 

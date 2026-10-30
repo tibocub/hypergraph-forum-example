@@ -39,12 +39,12 @@ test('friends join with one-time codes, and any member invites', async (t) => {
   await d.setup({ password: 'pw-d-long' })
   t.is(await codeOf(d.call('account', 'redeemInvite', code)), 'INVITE_USED_UP', 'a code works once')
 
-  // F6: a friend's code can only give `member` today.
-  t.is(await codeOf(b.call(key, 'createInvite', { role: 'friend' })), 'NOT_ALLOWED', 'a friend can\'t invite as friend (F6)')
-  const fromB = await b.call(key, 'createInvite', { role: 'member', expires: Date.now() + 864e5 })
+  // F6: a friend invites to their own role, not above it.
+  t.is(await codeOf(b.call(key, 'createInvite', { role: 'admin' })), 'NOT_ALLOWED', 'a friend can\'t invite as admin')
+  const fromB = await b.call(key, 'createInvite', { role: 'friend', expires: Date.now() + 864e5 })
   await d.call('account', 'redeemInvite', fromB)
   const dState = await d.call('account', 'state')
-  t.is(await a.call(key, 'getRole', dState.identity), 'member', 'b let d in')
+  t.ok(await eventually(async () => (await a.call(key, 'getRole', dState.identity)) === 'friend', 10000), 'b let d in as a friend (F6)')
 
   const names = async () => (await a.call(key, 'members')).filter((m) => m.role).length
   t.ok(await eventually(async () => (await names()) === 4, 10000), 'a lists the 4 members')

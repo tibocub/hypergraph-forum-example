@@ -12,7 +12,7 @@ test('a moderator hides, reveals and takes down; bans, the owner unbans; the log
   t.ok(await eventually(async () => (await b.call(key, 'getRole', ib)) === 'moderator', 10000), 'b is a moderator')
 
   const board = await a.call(key, 'createSubspace', { name: 'Talk' })
-  t.ok(await eventually(async () => (await c.call('account', 'spaces')).some((s) => s.key === board.key), 10000), 'c has the board')
+  t.ok(await eventually(async () => (await c.call(key, 'subspaces')).some((s) => s.key === board.key), 10000), 'c has the board')
   const post = await c.call(board.key, 'put', 'post', { title: 'Hi', text: '' })
   const rude = await c.call(board.key, 'put', 'comment', { on: post.id, text: 'rude' })
   const shown = async () => (await a.call(board.key, 'linked', post.id, 'comment')).items.length

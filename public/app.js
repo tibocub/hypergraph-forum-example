@@ -122,8 +122,7 @@ function joinScreen () {
 }
 
 async function navBar () {
-  // The account's list, not forum.subspaces(): a board listed there may not open yet (F7).
-  const boards = [{ key: me.forum.key, name: 'General' }, ...(await call('account', 'spaces')).filter((s) => s.parent === me.forum.key)]
+  const boards = [{ key: me.forum.key, name: 'General' }, ...(await call(me.forum.key, 'subspaces'))]
   $('#brand').textContent = me.forum.name || 'Forum'
   $('#boards').innerHTML = boards.map((b) => `<a href="#/b/${esc(b.key)}" class="${route[1] === b.key ? 'here' : ''}">${esc(b.name)}</a>`).join('')
   $('#links').hidden = false
@@ -295,7 +294,7 @@ async function describe (d) {
 async function logScreen () {
   const mod = MODS.includes(await call(me.forum.key, 'getRole', me.identity))
   const render = async () => {
-    const spaces = [me.forum.key, ...(await call('account', 'spaces')).filter((s) => s.parent === me.forum.key).map((b) => b.key)]
+    const spaces = [me.forum.key, ...(await call(me.forum.key, 'subspaces')).map((b) => b.key)]
     const lists = await Promise.all(spaces.map(async (space) => (await call(space, 'decisions', { limit: 50 })).items.map((d) => ({ ...d, space }))))
     const all = lists.flat().sort((x, y) => y.at - x.at).slice(0, 100)
     const rows = await Promise.all(all.map(async (d) => {
@@ -356,15 +355,13 @@ async function settingsScreen () {
   })
   $('#invite').onclick = async () => {
     try {
-      // F6: only owner and admins can give `friend`; a friend's code gives `member`.
-      const code = await call(me.forum.key, 'createInvite', { role: decides ? 'friend' : 'member', expires: Date.now() + 7 * 864e5 })
+      const code = await call(me.forum.key, 'createInvite', { role: 'friend', expires: Date.now() + 7 * 864e5 })
       $('#code').textContent = code
     } catch (err) { showError(err) }
   }
   if (decides) {
     onSubmit($('#board'), async ({ name }) => {
       const b = await call(me.forum.key, 'createSubspace', { name })
-      await call(b.key, 'setPolicy', 'everything') // sub-spaces don't follow the forum's policy (F5)
       location.hash = `#/b/${b.key}`
     })
   }

@@ -29,6 +29,7 @@ uses H1…).
   sub-space work like on a top space (its decisions live in the parent's log)?
   **Answered (lead, 2026-10-30)**: no inheritance today (own policy or 'auto'); keep the per-board
   `setPolicy('everything')`. A core fix to inherit it is proposed.
+  **Fixed (29e8423)**: a sub-space takes the parent's policy; the forum no longer sets it per board.
 
 ## For hypergraph spec 013 (helpers), from the forum
 
@@ -52,6 +53,8 @@ uses H1…).
   space setting "members may invite", a way to give the built-in `member` role more permissions per
   space, or a custom role allowed to invite to itself. The forum meanwhile invites as `friend` when it
   may, else as `member` (so a friend's friend can't invite yet).
+  **Fixed (29e8423)**: a role with `invite` and no `moderate`/`roles`/`decide` invites to its own role;
+  every code is `friend` now. Peers on an older hypergraph refuse those invites: everyone updates together.
 
 - **F7 — `space.subspaces()` lists a sub-space before `hg.space(key)` opens it.** On a member's
   computer, right after the owner adds a board, `forum.subspaces()` already lists it while
@@ -61,3 +64,4 @@ uses H1…).
   breaks on a quick click. `hg.spaces()` doesn't have the gap (it reads the same map as
   `hg.space()`), so the forum lists boards from `hg.spaces()` filtered by `parent`. Wanted:
   `subspaces()` lists only what `hg.space()` opens (or `hg.space()` opens anything listed).
+  **Fixed (29e8423)**: listed once it opens (`spaces` fires then); the forum uses `subspaces()` again.
