@@ -201,7 +201,7 @@ async function threadScreen (board, id) {
   $('#main').innerHTML = `<p>${sortMenu('thread', { old: 'Oldest comments first', votes: 'Most votes first' })}</p><div id="thread"></div>
     <form id="reply" class="card"><strong id="reply-to">Comment</strong>
       <textarea name="text" required></textarea>
-      <div><button type="submit">Send</button> <button type="button" class="link" id="reply-reset" hidden>Comment on the thread instead</button></div></form>`
+      <div><button type="submit">Send</button> ${SENDS} <button type="button" class="link" id="reply-reset" hidden>Comment on the thread instead</button></div></form>`
   let replyTo = id
   const resetReply = () => { replyTo = id; $('#reply-to').textContent = 'Comment'; $('#reply-reset').hidden = true }
   $('#reply-reset').onclick = resetReply
@@ -247,7 +247,7 @@ async function threadScreen (board, id) {
       if (act === 'up' || act === 'down') await call(board, 'put', 'vote', { on: rid, value: act === 'up' ? 1 : -1 })
       if (act === 'reply') { replyTo = rid; $('#reply-to').textContent = 'Reply'; $('#reply-reset').hidden = false; $('#reply textarea').focus() }
       if (act === 'del' && confirm('Delete this for everyone?')) await call(board, 'del', rid)
-      if (act === 'edit') await edit(board, rid, el.dataset.type)
+      if (act === 'edit') return (location.hash = `#/edit/${board}/${rid}/${id}`)
       if (act === 'hide') await moderate(board, 'hide', rid, prompt('Why hide it? (shown in the log)'))
       if (act === 'reveal') await moderate(board, 'reveal', rid, '')
       if (act === 'takedown' && confirm('Take this down for good, for everyone?')) await moderate(board, 'remove', rid, prompt('Why? (shown in the log)'))
@@ -265,19 +265,32 @@ async function moderate (space, action, target, reason) {
   await call(space, 'moderateAction', action, target, { reason })
 }
 
-async function edit (board, id, type) {
-  const { record } = await call(board, 'get', id)
-  const changes = {}
-  if (type === 'post') {
-    const title = prompt('Title', record.title)
-    if (title === null) return
-    changes.title = title
-  }
-  const text = prompt('Text', record.text)
-  if (text === null) return
-  changes.text = text
-  await call(board, 'edit', id, changes)
+const SENDS = `<span class="muted">${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'}+Enter sends</span>`
+
+// A page for writing: a new thread in `board` (no id), or an edit of the thread or
+// comment `id`; then back to `thread`.
+async function writeScreen (board, id = null, thread = id) {
+  const record = id ? (await call(board, 'get', id)).record : { type: 'post', title: '', text: '' }
+  if (!record) throw new Error('This isn\'t here any more')
+  const post = record.type === 'post'
+  const back = thread ? `#/t/${board}/${thread}` : `#/b/${board}`
+  $('#main').innerHTML = `<form id="write" class="card"><strong>${id ? 'Edit' : 'New thread'}</strong>
+    ${post ? `<input name="title" maxlength="300" placeholder="Title" aria-label="Title" required value="${esc(record.title)}">` : ''}
+    <textarea name="text" ${post ? '' : 'required'} aria-label="Text" placeholder="Text (**bold**, *italic*, [link](https://…), - lists)">${esc(record.text)}</textarea>
+    <div><button type="submit">${id ? 'Save' : 'Post'}</button> <a href="${esc(back)}">Cancel</a> ${SENDS}</div></form>`
+  $('#write').querySelector(post ? 'input' : 'textarea').focus()
+  onSubmit($('#write'), async (fields) => {
+    if (id) await call(board, 'edit', id, fields)
+    else thread = (await call(board, 'put', 'post', fields)).id
+    location.hash = `#/t/${board}/${thread}`
+  })
+  return { space: null, types: [], render: async () => '', into: '#write' } // nothing live: '' never redraws
 }
+
+// Ctrl+Enter (⌘+Enter on a Mac) sends the form being typed in.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.form) { e.preventDefault(); e.target.form.requestSubmit() }
+})
 
 // A member's page: their about-me, then what they wrote. Your own page edits it.
 async function userScreen (identity) {
@@ -465,6 +478,7 @@ async function show () {
   if (route[0] === 'b' && route[1]) screen = await boardScreen(route[1])
   else if (route[0] === 't' && route[1] && route[2]) screen = await threadScreen(route[1], route[2])
   else if (route[0] === 's' && route[1] && route[2]) screen = await searchScreen(route[1], decodeURIComponent(route[2]))
+  else if (route[0] === 'edit' && route[1] && route[2] && route[3]) screen = await writeScreen(route[1], route[2], route[3])
   else if (route[0] === 'u' && route[1]) screen = await userScreen(route[1] === 'me' ? me.identity : route[1])
   else if (route[0] === 'settings') screen = await settingsScreen()
   else if (route[0] === 'people') screen = await peopleScreen()
