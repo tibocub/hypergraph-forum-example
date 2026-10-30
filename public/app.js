@@ -2,6 +2,7 @@
 // /api/call; the live channel says when to read again what is on screen.
 
 import { markdown } from './markdown.js'
+import { commentCount } from './lists.js'
 
 const $ = (sel) => document.querySelector(sel)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -143,9 +144,9 @@ async function boardScreen (board) {
   const render = async () => {
     const { items, complete } = await call(board, 'query', { type: 'post', limit: shown })
     const rows = await Promise.all(items.map(async (p) => {
-      const [score, comments, who] = await Promise.all([call(board, 'sum', 'vote', 'value', { on: p.id }), call(board, 'count', 'comment', { on: p.id }), nameOf(p.author)])
+      const [score, comments, who] = await Promise.all([call(board, 'sum', 'vote', 'value', { on: p.id }), commentCount(call, board, p.id), nameOf(p.author)])
       return `<div class="card"><a class="thread-title" href="#/t/${esc(board)}/${esc(p.id)}">${esc(p.title)}</a>
-        <div class="muted">${score.value} points · ${comments.value} comments · ${esc(who)} · ${when(p.stamp)}</div></div>`
+        <div class="muted">${score.value} points · ${comments} comments · ${esc(who)} · ${when(p.stamp)}</div></div>`
     }))
     $('#more').hidden = items.length < shown
     return (rows.join('') || '<p class="muted">No threads yet.</p>') + (complete ? '' : '<p class="muted">Still syncing…</p>')

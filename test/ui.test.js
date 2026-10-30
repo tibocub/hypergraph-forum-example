@@ -14,7 +14,7 @@ test('the login link, then the page and its files', async (t) => {
   const headers = { cookie: cookie.split(';')[0] }
   const page = await fetch(a.url + '/', { headers })
   t.ok((await page.text()).includes('src="/app.js"'), 'the page loads app.js')
-  for (const file of ['/app.js', '/markdown.js', '/style.css']) {
+  for (const file of ['/app.js', '/markdown.js', '/lists.js', '/style.css']) {
     const res = await fetch(a.url + file, { headers })
     t.is(res.status, 200, `${file} served`)
   }
