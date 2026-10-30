@@ -9,8 +9,8 @@ Node process on their own computer and uses it in a browser tab on `127.0.0.1`. 
 hypergraph's new core (`require('hypergraph/next')`) to prove hypergraph with real people. Its pieces
 (the JSON API, the live channel) later seed HyperBrowser.
 
-State (2026-10-30): spec 001 phases 1–8 and T029 (helpers) built on branch `001-forum`; Tibo does the
-manual checks (T027), then the trial (phase 9). `npm test` runs everything.
+State (2026-10-30): spec 001 built, plus Tibo's to-dos (README) through multi-forum on branch `003-todos`;
+Tibo does the manual checks (T027), then the trial (phase 9). `npm test` runs everything.
 
 ## Governing documents
 

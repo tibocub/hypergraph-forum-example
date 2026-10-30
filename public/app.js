@@ -51,13 +51,14 @@ function onSubmit (form, fn) {
 
 // --- names (FR-007): a member's latest profile record ---
 
-const names = new Map()
+const names = new Map() // `${forum} ${identity}` -> name: a profile is per forum
 async function nameOf (identity) {
-  if (!names.has(identity)) {
-    names.set(identity, call(me.forum.key, 'query', { type: 'profile', by: identity, limit: 1 })
+  const k = `${me.forum.key} ${identity}`
+  if (!names.has(k)) {
+    names.set(k, call(me.forum.key, 'query', { type: 'profile', by: identity, limit: 1 })
       .then((r) => r.items[0]?.name || identity.slice(0, 8)))
   }
-  return names.get(identity)
+  return names.get(k)
 }
 // A member's name, as a link to their page.
 const person = async (identity) => `<a href="#/u/${esc(identity)}">${esc(await nameOf(identity))}</a>`
@@ -100,14 +101,15 @@ async function phraseScreen (password) {
   $('#forget').onclick = () => call('account', 'forgetRecoveryPhrase').then(start, showError)
 }
 
-function joinScreen () {
+// Join a forum with a code, or create one (`create`: that part open).
+function joinScreen (create = false) {
   $('#main').innerHTML = `
-    <h1>Join the forum</h1>
+    <h1>Join a forum</h1>
     <form id="join" class="card">
       <label>Invite code (a friend sends it to you) <input name="code" required></label>
       <label>Your name, as others will see it <input name="name" maxlength="40" required></label>
       <button type="submit">Join</button></form>
-    <details class="card"><summary>Nobody has made the forum yet? Create it.</summary>
+    <details class="card" ${create ? 'open' : ''}><summary>Or create a new forum</summary>
       <form id="create">
         <label>Forum name <input name="forum" required></label>
         <label>Your name <input name="name" maxlength="40" required></label>
@@ -115,19 +117,30 @@ function joinScreen () {
   onSubmit($('#join'), async ({ code, name }) => {
     const f = await call('account', 'redeemInvite', code.trim())
     await call(f.key, 'put', 'profile', { name })
-    await start()
+    await enter(f)
   })
   onSubmit($('#create'), async ({ forum, name }) => {
     const f = await call('account', 'createSpace', { name: forum, policy: 'everything' })
     await call(f.key, 'defineRole', 'friend', ['post', 'invite']) // any member may invite (Tibo, F6)
     await call(f.key, 'put', 'profile', { name })
-    await start()
+    await enter(f)
   })
 }
 
+// Opens forum `f` just joined or made.
+async function enter (f) {
+  me = await call('account', 'state')
+  me.forum = f
+  if (location.hash === `#/b/${f.key}`) await show()
+  else location.hash = `#/b/${f.key}`
+}
+
 async function navBar () {
+  if (!me.forum) return
   const boards = [{ key: me.forum.key, name: 'General' }, ...(await call(me.forum.key, 'subspaces'))]
   $('#brand').textContent = me.forum.name || 'Forum'
+  $('#forums').innerHTML = me.forums.map((f) => `<a href="#/b/${esc(f.key)}" class="${f.key === me.forum.key ? 'here' : ''}">${esc(f.name || 'Forum')}</a>`).join('') +
+    '<hr><a href="#/join">Join a forum</a><a href="#/join/create">Create a forum</a>'
   $('#boards').innerHTML = boards.map((b) => `<a href="#/b/${esc(b.key)}" class="${route[1] === b.key ? 'here' : ''}">${esc(b.name)}</a>`).join('')
   $('#links').hidden = false
   $('#admin-link').hidden = !MODS.includes(await call(me.forum.key, 'getRole', me.identity))
@@ -306,7 +319,7 @@ async function userScreen (identity) {
   if (mine) {
     onSubmit($('#profile'), async (fields) => {
       await call(me.forum.key, 'put', 'profile', fields) // every field: the latest profile record is the whole page
-      names.delete(me.identity)
+      names.clear()
       show()
     })
   }
@@ -538,8 +551,25 @@ async function refresh () {
   $(target.into).innerHTML = html
 }
 
+// The forum on screen: the one of the board in the link, else the last one used, else the first.
+async function pickForum () {
+  const key = ['b', 't', 's', 'new', 'edit'].includes(route[0]) ? route[1] : null
+  const space = key && (await call('account', 'spaces')).find((s) => s.key === key)
+  const remembered = (() => { try { return localStorage.getItem('forum') } catch { return null } })()
+  me.forum = (space && me.forums.find((f) => f.key === (space.parent || space.key))) ||
+    me.forums.find((f) => f.key === (me.forum?.key || remembered)) || me.forums[0]
+  try { localStorage.setItem('forum', me.forum.key) } catch {}
+}
+
 async function show () {
   route = location.hash.replace(/^#\/?/, '').split('/')
+  $('.brand-menu').open = false
+  if (route[0] === 'join' || !me.forums.length) {
+    screen = null
+    joinScreen(route[1] === 'create')
+    return navBar()
+  }
+  await pickForum()
   if (route[0] === 'b' && route[1]) screen = await boardScreen(route[1])
   else if (route[0] === 't' && route[1] && route[2]) screen = await threadScreen(route[1], route[2])
   else if (route[0] === 's' && route[1] && route[2]) screen = await searchScreen(route[1], decodeURIComponent(route[2]))
@@ -556,9 +586,10 @@ async function show () {
 }
 
 async function start () {
+  const forum = me?.forum
   me = await call('account', 'state')
   if (!me.setUp) return setupScreen()
-  if (!me.forum) return joinScreen()
+  me.forum = forum
   await show()
 }
 
@@ -572,9 +603,17 @@ live.addEventListener('change', (e) => {
   if (screen && (space === screen.space || !screen.space) && records.some((r) => screen.types.includes(r.type))) soon(refresh)
 })
 for (const name of ['members', 'decisions', 'peers', 'devices']) live.addEventListener(name, () => { if (screen?.on?.includes(name)) soon(refresh) })
-for (const name of ['spaces', 'peers']) live.addEventListener(name, () => { if (me?.forum) soon(navBar) })
-// A computer just paired gets the forum a moment after setup.
-live.addEventListener('spaces', () => { if (me?.setUp && !me.forum) soon(start) })
+live.addEventListener('peers', () => { if (me?.forum) soon(navBar) })
+// A forum or board joined or added (a computer just paired gets its forums a moment after setup).
+live.addEventListener('spaces', () => {
+  if (!me?.setUp) return
+  soon(async () => {
+    const had = me.forums.length
+    me.forums = (await call('account', 'state')).forums
+    if (!had && me.forums.length) await start()
+    else await navBar()
+  })
+})
 
-window.addEventListener('hashchange', () => { if (me?.forum) show().catch(showError) })
+window.addEventListener('hashchange', () => { if (me?.setUp) show().catch(showError) })
 start().catch(showError)

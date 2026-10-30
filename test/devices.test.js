@@ -17,7 +17,7 @@ test('a second computer: same person and forum; removed with the password', asyn
   const state = await a2.call('account', 'state')
   t.is(state.identity, me.identity, 'the same person')
   t.not(state.device, me.device, 'another device')
-  t.ok(await eventually(async () => (await a2.call('account', 'state')).forum?.key === key, 15000), 'the forum is there')
+  t.ok(await eventually(async () => (await a2.call('account', 'state')).forums.some((f) => f.key === key), 15000), 'the forum is there')
 
   const post = await eventually(async () => a2.call(key, 'put', 'post', { title: 'from my laptop', text: '' }).catch(() => null), 10000)
   t.ok(post, 'it writes in the forum')

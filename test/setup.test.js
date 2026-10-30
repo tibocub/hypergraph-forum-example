@@ -1,9 +1,9 @@
-// Story 1: set up, create the one forum, let friends in with one-time codes.
+// Story 1: set up, create a forum, let friends in with one-time codes.
 
 import test from 'brittle'
 import { peer, forumOf, eventually, codeOf } from './helpers.js'
 
-test('set up, create the forum, one forum only, the recovery phrase behind the password', async (t) => {
+test('set up, create a forum, the recovery phrase behind the password', async (t) => {
   const a = await peer(t, 'a')
   t.alike(await a.call('account', 'state'), { setUp: false }, 'not set up yet')
   t.is(await codeOf(a.setup({ password: 'short' })), 'BAD_PASSWORD', 'a password of 8 at least')
@@ -11,13 +11,12 @@ test('set up, create the forum, one forum only, the recovery phrase behind the p
   t.is(await codeOf(a.setup({ password: 'pw-a-long' })), 'ALREADY_SET_UP', 'once')
 
   const state = await a.call('account', 'state')
-  t.ok(state.setUp && typeof state.identity === 'string' && state.forum === null, 'set up, no forum yet')
+  t.ok(state.setUp && typeof state.identity === 'string' && state.forums.length === 0, 'set up, no forum yet')
 
   const f = await a.call('account', 'createSpace', { name: 'Friends', policy: 'everything' })
   t.is(f.name, 'Friends', 'the forum, as { key, name }')
-  t.is((await a.call('account', 'state')).forum.key, f.key, 'state shows it')
+  t.alike((await a.call('account', 'state')).forums.map((s) => s.key), [f.key], 'state lists it')
   t.is((await a.call(f.key, 'status')).policy, 'everything', 'every member keeps everything')
-  t.is(await codeOf(a.call('account', 'createSpace', { name: 'Another' })), 'ONE_FORUM', 'one forum per account')
 
   t.ok(await codeOf(a.call('account', 'recoveryPhrase')), 'the phrase needs the password')
   const words = await a.call('account', 'recoveryPhrase', 'pw-a-long')
@@ -27,9 +26,8 @@ test('set up, create the forum, one forum only, the recovery phrase behind the p
 test('friends join with one-time codes, and any member invites', async (t) => {
   const { key, peers: [a, b] } = await forumOf(t, 'a', 'b')
   const bState = await b.call('account', 'state')
-  t.is(bState.forum.key, key, 'b is in the forum')
+  t.alike(bState.forums.map((s) => s.key), [key], 'b is in the forum')
   t.is(await b.call(key, 'getRole', bState.identity), 'friend', 'as a friend')
-  t.is(await codeOf(b.call('account', 'redeemInvite', 'whatever')), 'ONE_FORUM', 'no second forum')
 
   const code = await a.call(key, 'createInvite', { role: 'friend', expires: Date.now() + 864e5 })
   const c = await peer(t, 'c')

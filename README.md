@@ -19,7 +19,6 @@ Features:
 - multi-device support
 
 TODOs (top = more priority):
-- Multi forum support (in top left corner where the forum's name is currently displayed could be a drop-down menu that show joined forums and the buttons "join a forum" and "create a new forum", a bit like discord)
 - Maybe an optional custom CSS per forum
 
 ## Install

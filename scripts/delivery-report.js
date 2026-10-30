@@ -14,9 +14,12 @@ export function report (files) {
   const names = new Map()
   for (const file of files) {
     const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
-    const head = lines.find((l) => l.joinedAt)
-    if (!head) continue // a computer that never got into the forum
-    devices.push({ ...head, file: path.basename(file) })
+    const heads = lines.filter((l) => l.joinedAt)
+    if (!heads.length) continue // a computer that never got into a forum
+    const head = heads[0]
+    // joinedAt per forum; a line with no forum (the one-forum version's) covers any forum
+    const joined = new Map(heads.map((h) => [h.forum ?? null, h.joinedAt]))
+    devices.push({ ...head, joinedAt: Math.min(...heads.map((h) => h.joinedAt)), joined, file: path.basename(file) })
     for (const l of lines) {
       if (!l.id) continue
       if (l.type === 'profile') {
@@ -24,19 +27,20 @@ export function report (files) {
         if (!known || known.postedAt < l.postedAt) names.set(l.author, l)
         continue
       }
-      if (!records.has(l.id)) records.set(l.id, { id: l.id, type: l.type, author: l.author, device: l.device, postedAt: l.postedAt, seen: new Map() })
+      if (!records.has(l.id)) records.set(l.id, { id: l.id, type: l.type, forum: l.forum ?? null, author: l.author, device: l.device, postedAt: l.postedAt, seen: new Map() })
       records.get(l.id).seen.set(head.device, l.seenAt)
     }
   }
 
-  // A record counts for a computer only if it was posted after that computer joined.
+  // A record counts for a computer only if it was posted after that computer joined its forum.
   // shortcut: a record deleted before it reached a computer shows as missing there; check those by hand.
   const missing = []
   const delays = []
   let counted = 0
   for (const r of records.values()) {
     for (const d of devices) {
-      if (r.postedAt < d.joinedAt) continue
+      const joinedAt = d.joined.get(r.forum) ?? d.joined.get(null)
+      if (joinedAt === undefined || r.postedAt < joinedAt) continue
       counted++
       if (!r.seen.has(d.device)) missing.push({ id: r.id, type: r.type, author: r.author, postedAt: r.postedAt, device: d.device, file: d.file })
       else if (d.device !== r.device) delays.push(r.seen.get(d.device) - r.postedAt)
