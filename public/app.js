@@ -133,6 +133,7 @@ async function navBar () {
 
 const PAGE = 20
 const sorts = { board: 'new', thread: 'old' } // kept while the page is open
+const folded = new Set() // ids of collapsed comments, kept across redraws
 
 // A sort menu that redraws the screen on change.
 function sortMenu (which, options) {
@@ -186,6 +187,8 @@ async function threadScreen (board, id) {
 
   // shortcut: one linked() call per comment, fine for a friends' forum; batch if threads reach hundreds of comments.
   const item = async (r) => {
+    const fold = (open) => `<button class="link" data-act="fold" aria-expanded="${open}" aria-label="${open ? 'Collapse' : 'Expand'} this comment and its replies">[${open ? '−' : '+'}]</button>`
+    if (folded.has(r.id)) return `<div class="comment" data-id="${esc(r.id)}"><div class="muted">${fold(false)} ${esc(await nameOf(r.author))} · ${when(r.stamp)}</div></div>`
     const [who, under] = await Promise.all([nameOf(r.author), replies(call, board, r.id, sorts.thread)])
     const mine = r.author === me.identity
     const body = (r.type === 'post' ? `<h1>${esc(r.title)}</h1>${markdown(r.text)}` : markdown(r.text)) +
@@ -193,6 +196,7 @@ async function threadScreen (board, id) {
     return `<div class="${r.type === 'post' ? 'card' : 'comment'}" data-id="${esc(r.id)}" data-type="${r.type}">
       ${body}
       <div class="muted votes">
+        ${r.type === 'comment' ? fold(true) : ''}
         <button data-act="up" aria-label="Vote up">▲</button> ${r.score} <button data-act="down" aria-label="Vote down">▼</button>
         · ${esc(who)} · ${when(r.stamp)}${r.edited ? ' · edited' : ''}
         <button class="link" data-act="reply">reply</button>
@@ -212,6 +216,7 @@ async function threadScreen (board, id) {
     if (!act || !el) return
     const rid = el.dataset.id
     try {
+      if (act === 'fold' && !folded.delete(rid)) folded.add(rid)
       if (act === 'up' || act === 'down') await call(board, 'put', 'vote', { on: rid, value: act === 'up' ? 1 : -1 })
       if (act === 'reply') { replyTo = rid; $('#reply-to').textContent = 'Reply'; $('#reply-reset').hidden = false; $('#reply textarea').focus() }
       if (act === 'del' && confirm('Delete this for everyone?')) await call(board, 'del', rid)
