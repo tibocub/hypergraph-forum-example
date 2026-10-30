@@ -172,13 +172,10 @@ async function searchScreen (scope, words) {
 
 async function boardScreen (board) {
   $('#main').innerHTML = `
+    <p><a class="button" href="#/new/${esc(board)}">New thread</a></p>
     ${searchForm()}
     <p>${sortMenu('board', { new: 'Newest', votes: 'Votes', comments: 'Comments' })}</p>
-    <div id="list"></div><p><button id="more" hidden>More</button></p>
-    <form id="post" class="card"><strong>New thread</strong>
-      <input name="title" maxlength="300" placeholder="Title" required>
-      <textarea name="text" placeholder="Text (**bold**, *italic*, [link](https://…), - lists)"></textarea>
-      <button type="submit">Post</button></form>`
+    <div id="list"></div><p><button id="more" hidden>More</button></p>`
   wireSearch(board)
   let shown = PAGE
   const render = async () => {
@@ -189,10 +186,6 @@ async function boardScreen (board) {
     return (rows.join('') || '<p class="muted">No threads yet.</p>') + (complete ? '' : '<p class="muted">Still syncing…</p>')
   }
   $('#more').onclick = () => { shown += PAGE; refresh() }
-  onSubmit($('#post'), async ({ title, text }) => {
-    const p = await call(board, 'put', 'post', { title, text })
-    location.hash = `#/t/${board}/${p.id}`
-  })
   return { space: board, types: ['post', 'comment', 'vote', 'profile'], render, into: '#list' }
 }
 
@@ -478,6 +471,7 @@ async function show () {
   if (route[0] === 'b' && route[1]) screen = await boardScreen(route[1])
   else if (route[0] === 't' && route[1] && route[2]) screen = await threadScreen(route[1], route[2])
   else if (route[0] === 's' && route[1] && route[2]) screen = await searchScreen(route[1], decodeURIComponent(route[2]))
+  else if (route[0] === 'new' && route[1]) screen = await writeScreen(route[1])
   else if (route[0] === 'edit' && route[1] && route[2] && route[3]) screen = await writeScreen(route[1], route[2], route[3])
   else if (route[0] === 'u' && route[1]) screen = await userScreen(route[1] === 'me' ? me.identity : route[1])
   else if (route[0] === 'settings') screen = await settingsScreen()
