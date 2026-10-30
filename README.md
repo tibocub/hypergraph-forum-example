@@ -8,7 +8,7 @@ that shows how to build apps with hypergraph.
 It's not an app made for one specific forum, its a P2P forum client that let users create and join
 forums.
 
-Features implemented:
+Features:
 - Boards
 - threads
 - comments
@@ -18,6 +18,17 @@ Features implemented:
 - moderation
 - multi-device support
 
+TODOs (top = more priority):
+- Ctrl+Enter sends the post/comment/reply
+- Make the comment counter on posts count replies
+- Add sorting by date/vote/comments in boards (to sort posts) and by date/votes in posts (to sort comments). Default is chronological order
+- Make comments collapsible (collapse a comment and all its replies)
+- Searches, forum-wide and per-board (maybe only search for matches in posts titles and content, not comments and relies)
+- User pages (a bit like reddit a page where we can see all the posts and replies of a user, let a users put some info about themselves such as a small quote, some contact info, personnal websites, etc.) and a "Profile" link on the top right next to "People", "Log" and "Settings"
+- Multi forum support (in top left corner where the forum's name is currently displayed could be a drop-down menu that show joined forums and the buttons "join a forum" and "create a new forum", a bit like discord)
+- Maybe an optional custom CSS per forum
+- Create an admin panel and the ability to promote admins (same rights as the owner except promoting/depromoting users)
+- Add a "signal" feature for users to signal problematic posts and comments to the moderation (signaled content notification shows in the admin panel)
 
 ## Install
 
@@ -48,15 +59,19 @@ so updating never touches it.
 
 - Start it: open a terminal, then
   ```bash
-  cd ~/hypergraph-forum-app/hypergraph-forum-example
+  cd /path/to/hypergraph-forum-example
   ```
   ```bash
   npm start
   ```
-  The browser opens on the forum. Your bookmark of it keeps working.
-- **Keep that window open**: you are online with your friends only while it runs. Posts you write
-  while your friends are offline reach them when you're both online again.
-- Invite a friend: Settings → Make a code. A code works once, for 7 days.
+  The browser should opens on the forum automatically. If not, open the link "https://127.0.0.1..." in your browser.
+  You can bookmark this link, it will keep working.
+
+- **Keep the terminal open**: you are online with your friends only while the backend is running, the webpage only is
+the visual interface. Posts you write while your friends are offline will reach them when you're both online again.
+
+- Invite a friend: Settings → Make a code and send it to your friend. A code works once, for 7 days.
+
 - Another computer of yours: Settings → Add a computer, then install on the new one and choose
   "I already use the forum on another computer".
 
@@ -66,6 +81,7 @@ so updating never touches it.
 - A friend can only join while you (or an admin) are online. Make a trusted friend admin (People),
   so either of you can let people in.
 - Lost a computer? Settings → Your computers → remove, from another of yours.
+
 
 ## The trial: did every post arrive?
 
