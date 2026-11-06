@@ -17,6 +17,7 @@ Features:
 - edit and delete
 - moderation
 - multi-device support
+- public forums: anyone with the forum's link joins (optional, for good)
 
 TODOs (top = more priority):
 
@@ -42,8 +43,8 @@ browser. Then:
 2. Paste the invite code a friend sent you, and your name.
 
 Run the same line again to update. Your data is elsewhere (`.hypergraph-forum` in your home folder),
-so updating never touches it. Everyone in a forum should update at the same time: older versions refuse
-invites made by friends, the new profile fields, reports to moderators and forum themes.
+so updating never touches it. Everyone in a forum should update at the same time: this version can't talk to older ones at all
+(hypergraph's protocol changed), so friends on an older version look offline until they update.
 
 
 ## Every day
@@ -63,13 +64,18 @@ the visual interface. Posts you write while your friends are offline will reach 
 
 - Invite a friend: Settings → Make a code and send it to your friend. A code works once, for 7 days.
 
+- Open the forum to anyone (owner or admin): Settings → Make this forum public. Then Settings shows
+  the forum's link; anyone who pastes it in "Join a forum" is in at once, even with no admin online.
+  It can't be made invite-only again; bans still work (People). Codes keep working too.
+
 - Another computer of yours: Settings → Add a computer, then install on the new one and choose
   "I already use the forum on another computer".
 
 
 ## Tips
 
-- A friend can only join while you (or an admin) are online. Make a trusted friend admin (People),
+- With a code, a friend can only join while you (or an admin) are online (with a public forum's link,
+  any member online is enough). Make a trusted friend admin (People),
   so either of you can let people in.
 - Lost a computer? Settings → Your computers → remove, from another of yours.
 
