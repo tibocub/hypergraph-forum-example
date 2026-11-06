@@ -111,7 +111,7 @@ function joinScreen (create = false) {
   $('#main').innerHTML = `
     <h1>Join a forum</h1>
     <form id="join" class="card">
-      <label>Invite code (a friend sends it to you) <input name="code" required></label>
+      <label>Invite code, or a public forum's link (a friend sends it to you) <input name="code" required></label>
       <label>Your name, as others will see it <input name="name" maxlength="40" required></label>
       <button type="submit">Join</button></form>
     <details class="card" ${create ? 'open' : ''}><summary>Or create a new forum</summary>
@@ -359,6 +359,7 @@ async function userScreen (identity) {
 async function peopleScreen () {
   const role = await call(me.forum.key, 'getRole', me.identity)
   const decides = role === 'owner' || role === 'admin'
+  const open = await call(me.forum.key, 'isPublic') // public: a removed person walks back in, so only bans
   const render = async () => {
     const [members, peers] = await Promise.all([call(me.forum.key, 'members'), call(me.forum.key, 'peers')])
     const online = new Set(peers.map((p) => p.identity))
@@ -367,7 +368,7 @@ async function peopleScreen () {
       const actions = [
         decides && them && m.role ? `<select data-act="role" aria-label="Role">${(role === 'owner' ? ['admin', 'moderator', 'friend', 'member'] : ['moderator', 'friend', 'member']).map((r) => `<option ${r === m.role ? 'selected' : ''}>${r}</option>`).join('')}</select>` : '',
         MODS.includes(role) && them ? `<button class="link" data-act="${m.banned ? 'unban' : 'ban'}">${m.banned ? 'unban' : 'ban'}</button>` : '',
-        decides && them && m.role ? '<button class="link" data-act="remove">remove</button>' : ''
+        decides && them && m.role && !open ? '<button class="link" data-act="remove">remove</button>' : ''
       ].join(' ')
       const state = m.banned ? 'banned' : m.removed ? 'removed' : m.role
       return `<div class="card" data-who="${esc(m.identity)}"><strong>${await person(m.identity)}</strong>
@@ -554,11 +555,15 @@ async function adminScreen () {
 async function settingsScreen () {
   const role = await call(me.forum.key, 'getRole', me.identity)
   const decides = role === 'owner' || role === 'admin'
+  const open = await call(me.forum.key, 'isPublic')
+  const invites = (await call(me.forum.key, 'roles')).find((r) => r.name === role)?.permissions.includes('invite') // a public forum's members may not
   $('#main').innerHTML = `
     <h1>Settings</h1>
     <div class="card"><strong>Invite a friend</strong>
-      <p class="muted">A code works once, for 7 days. Send it any way you like.</p>
-      <p><button id="invite">Make a code</button></p><p class="words" id="code"></p></div>
+      ${invites ? '<p class="muted">A code works once, for 7 days. Send it any way you like.</p><p><button id="invite">Make a code</button></p><p class="words" id="code"></p>' : ''}
+      ${open
+        ? `<p class="muted">This forum is public: anyone with this link joins.</p><p class="words">${esc(await call(me.forum.key, 'publicLink'))}</p>`
+        : decides ? '<p><button id="public">Make this forum public</button> <span class="muted">Anyone with its link joins, no code needed. This can\'t be undone.</span></p>' : ''}</div>
     ${decides ? `<form id="board" class="card"><strong>New board</strong><input name="name" required><button type="submit">Add</button></form>` : ''}
     <form id="helpers" class="card"><strong>Helpers</strong>
       <p class="muted">Always-on computers that keep the forum available while everyone is offline. Never needed: the forum works without them.</p>
@@ -588,11 +593,20 @@ async function settingsScreen () {
       refresh()
     } catch (err) { showError(err) }
   }
-  $('#invite').onclick = async () => {
+  if (invites) $('#invite').onclick = async () => {
     try {
       const code = await call(me.forum.key, 'createInvite', { role: 'friend', expires: Date.now() + 7 * 864e5 })
       $('#code').textContent = code
     } catch (err) { showError(err) }
+  }
+  if ($('#public')) {
+    $('#public').onclick = async () => {
+      if (!confirm('Make this forum public, for good? Anyone with its link will join and post. Bans still work.')) return
+      try {
+        await call(me.forum.key, 'makePublic')
+        show()
+      } catch (err) { showError(err) }
+    }
   }
   if (decides) {
     onSubmit($('#board'), async ({ name }) => {
