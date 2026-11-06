@@ -39,7 +39,7 @@ prefix its python scripts with `PYTHONIOENCODING=utf-8`.
 ## Dependencies
 
 `"hypergraph": "file:../hypergraph"` (a junction made by `npm install`; never `ln -s` on Windows).
-hyperdht pinned to 6.32.0 like hypergraph (see its ROADMAP).
+hyperdht pinned to 6.36.0 like hypergraph (see its ROADMAP).
 
 ## Commits
 
