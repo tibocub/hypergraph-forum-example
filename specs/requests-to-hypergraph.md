@@ -120,3 +120,13 @@ uses H1…).
   applied it. Seen in `test/admin.test.js` (the test now waits). A moderator who bans and looks at once
   sees the spam still there. Wanted: resolve once everything dropped is out of every list here.
   **Fixed (hypergraph afae42b)**: a decision resolves once its cuts show, in every board open here.
+
+## Found while catching up with specs 015–017 (2026-11-06)
+
+- **F15 — Some reads are getters that throw until `await space.ready()`.** `space.helpers` and
+  `space.isPublic` are sync getters; since spec 015 (spaces open while used) they throw on a space
+  `hg.space(key)` hasn't opened yet. Nothing at the call site says so: an app developer finds out the
+  first time a user holds more spaces than `maxAnnounced`, not in tests (the forum's tests hold a few).
+  The forum now calls `await space.ready()` before both, in `lib/bridge.js`. Wanted, either: async
+  methods (`await space.helpers()`, `await space.isPublic()`, like `members()` and `roles()`), or
+  values that work right after `hg.space(key)` (read from the space's saved state without opening it).
