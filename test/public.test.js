@@ -29,4 +29,13 @@ test('the owner makes the forum public; anyone joins with its link while the own
   t.ok(await eventually(async () => (await b.call(key, 'members')).some((m) => m.identity === cid && m.role === 'member'), 15000), 'b lists c once c wrote')
   t.ok(await eventually(async () => (await b.call(key, 'query', { type: 'post' })).items.some((p) => p.id === post.id), 15000), 'b reads c\'s thread')
   t.ok(await b.call(key, 'createInvite', { role: 'friend' }), 'invite codes still work')
+
+  // Settings shows "Make a code" to roles whose permissions say invite (what the page reads).
+  const mayInvite = async (p, id) => {
+    const role = await p.call(key, 'getRole', id)
+    return (await p.call(key, 'roles')).find((r) => r.name === role).permissions.includes('invite')
+  }
+  t.is(await mayInvite(b, (await b.call('account', 'state')).identity), true, 'a friend may make a code')
+  t.is(await mayInvite(c, cid), false, 'a public member may not')
+  t.is(await codeOf(c.call(key, 'createInvite', { role: 'friend' })), 'NOT_ALLOWED', 'and indeed can\'t')
 })

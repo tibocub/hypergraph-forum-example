@@ -556,11 +556,11 @@ async function settingsScreen () {
   const role = await call(me.forum.key, 'getRole', me.identity)
   const decides = role === 'owner' || role === 'admin'
   const open = await call(me.forum.key, 'isPublic')
+  const invites = (await call(me.forum.key, 'roles')).find((r) => r.name === role)?.permissions.includes('invite') // a public forum's members may not
   $('#main').innerHTML = `
     <h1>Settings</h1>
     <div class="card"><strong>Invite a friend</strong>
-      <p class="muted">A code works once, for 7 days. Send it any way you like.</p>
-      <p><button id="invite">Make a code</button></p><p class="words" id="code"></p>
+      ${invites ? '<p class="muted">A code works once, for 7 days. Send it any way you like.</p><p><button id="invite">Make a code</button></p><p class="words" id="code"></p>' : ''}
       ${open
         ? `<p class="muted">This forum is public: anyone with this link joins.</p><p class="words">${esc(await call(me.forum.key, 'publicLink'))}</p>`
         : decides ? '<p><button id="public">Make this forum public</button> <span class="muted">Anyone with its link joins, no code needed. This can\'t be undone.</span></p>' : ''}</div>
@@ -593,7 +593,7 @@ async function settingsScreen () {
       refresh()
     } catch (err) { showError(err) }
   }
-  $('#invite').onclick = async () => {
+  if (invites) $('#invite').onclick = async () => {
     try {
       const code = await call(me.forum.key, 'createInvite', { role: 'friend', expires: Date.now() + 7 * 864e5 })
       $('#code').textContent = code
